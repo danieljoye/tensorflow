@@ -13,9 +13,15 @@ returns for the classical optimizers (MSR / efficient frontier).
 4. `factor.py` — statistical (PCA) factor model: reconstruct covariance from the
    top-k factors plus idiosyncratic variance.
 5. `returns_model.py` — expected-return estimators implementing `MeanModel`:
-   historical mean (annualized), EWMA mean, and a CAPM-/market-implied option.
-   Return `ExpectedReturns` aligned to `returns.assets`. These feed Agent 4's MSR
-   and efficient-frontier benchmarks.
+   historical mean (annualized), EWMA mean, a CAPM-/market-implied option, and a
+   **risk-based / total-volatility proxy** (expected return ∝ total volatility or
+   semi-deviation) per Martellini (2008) "Toward the Design of Better Equity
+   Benchmarks" — this avoids the unreliable sample mean and feeds Agent 4's
+   **Efficient-MSR** constructor. Return `ExpectedReturns` aligned to `returns.assets`.
+6. *(Advanced / stretch — only if time permits)* `comoments.py` — structured /
+   shrinkage estimators of co-skewness and co-kurtosis tensors (Martellini–Ziemann
+   2010), shrinking the sample comoment toward a structured target. Cite the paper;
+   keep it optional and clearly flagged. Full higher-moment optimization is roadmap.
 
 The four covariance estimators implement the `RiskModel` Protocol
 (`estimate(returns) -> np.ndarray`, symmetric PSD); the return estimators

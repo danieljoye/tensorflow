@@ -7,7 +7,7 @@ system. Each agent reads `docs/BUILD_PLAN.md` first, then its own prompt below.
 - Wave 0: Agent 0 (Foundation) — ✅ done; published the `core/` contracts.
 - Wave 0.5: Agent 0.5 (Core extension) — quick additive contracts (`ExpectedReturns`,
   `MeanModel`, `PortfolioConstructor`, `Allocator`). Must land before Wave 1.
-- Wave 1: Agents 1, 2, 3, 4 — run in parallel.
+- Wave 1: Agents 1, 2, 3, 4, 9 — run in parallel.
 - Wave 2: Agents 5, 6, 8.
 - Wave 3: Agent 7.
 
@@ -24,4 +24,6 @@ Every prompt shares this **common preamble** (prepend when dispatching):
 > built and any contract friction you hit.
 
 Individual prompts: `agent-0-foundation.md`, `agent-0.5-core-extension.md`,
-`agent-1-data-research.md` … `agent-7-api-dashboard.md`, `agent-8-dynamic.md`.
+`agent-1-data-research.md` … `agent-7-api-dashboard.md`, `agent-8-dynamic.md`,
+`agent-9-diversification.md`. Research provenance for every method is in
+`docs/BUILD_PLAN.md` §11 — agents should cite the relevant paper in module docstrings.

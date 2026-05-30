@@ -1,7 +1,8 @@
 # Agent 6 — Analytics & Reporting
 
 **Wave:** 2. **Owns:** `riskbudget/analytics/*`, `riskbudget/reporting/*`.
-**Depends on:** Agent 0 (`core/`) + Agent 5's `BacktestResult` interface.
+**Depends on:** Agent 0 (`core/`), Agent 5's `BacktestResult` interface, and Agent
+9's `diversification/metrics.py` (import ENB / Diversification Ratio — don't reimplement).
 
 ## Scope
 Turn a `BacktestResult` (and point-in-time portfolios) into numbers and reports.
@@ -18,8 +19,9 @@ Follow the EDHEC course `edhec_risk_kit` formulations for the risk metrics.
    (Jarque-Bera test).
 4. `analytics/attribution.py` — risk-contribution attribution through time (each
    asset/group's TRC at each rebalance, verifying contributions sum to total risk;
-   reuse Agent 4's `contributions.py`); realized vs. target budget drift; optional
-   factor-exposure attribution if a factor model is supplied.
+   reuse Agent 4's `contributions.py`); realized vs. target budget drift; **ENB and
+   Diversification Ratio through time** (import from Agent 9's `diversification/`);
+   optional factor-exposure attribution if a factor model is supplied.
 5. `analytics/summary.py` — `summary_stats()`: a canonical one-row-per-strategy
    table (annualized return, vol, Sharpe, max drawdown, skew, kurtosis,
    Cornish-Fisher VaR(5%), historic CVaR(5%)) for comparing strategies side by side.

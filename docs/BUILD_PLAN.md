@@ -31,6 +31,15 @@ CVaR), the efficient frontier (GMV, MSR), CPPI, and Monte-Carlo (GBM) simulation
 and extend beyond it with the cross-sectional risk-budgeting / ERC optimizer that
 is the core of this system.
 
+Beyond the course, the design draws on Martellini's published research and that of
+his co-authors (Milhau, Deguest, Meucci, Amenc, Goltz, Ziemann) — factor risk
+budgeting and the Effective Number of Bets, conditional/state-dependent risk
+budgets, ensemble "diversifying the diversifiers" construction, risk-based expected
+returns, and the PSP/LHP/safe-asset dynamic framework. Each such method is tagged
+to its source in §11 and tiered into v1 vs. roadmap (§10). Methods *not* due to
+Martellini (ERC: Maillard–Roncalli–Teïletche; MDP / Diversification Ratio:
+Choueifaty–Coignard; ENB/min-torsion: Meucci et al.) are attributed accordingly.
+
 ## 2. Domain background (shared vocabulary)
 
 For a weight vector `w` and covariance matrix `Σ`:
@@ -48,18 +57,29 @@ far more robust than Newton root-finding on the risk-contribution residuals.
 `cvxpy` is the primary backend; a `scipy.optimize` SLSQP path is the dependency-light
 fallback and a cross-check in tests.
 
-### Two senses of "risk budgeting"
+### Three senses of "risk budgeting"
 
-The system supports both, and they are complementary, not competing:
+The system supports all three; they are complementary, not competing:
 
-1. **Cross-sectional (the core):** distribute total portfolio risk *across assets*
-   so each asset/group contributes its target share `bᵢ` at a point in time. This
-   is the ERC / risk-contribution optimizer above.
-2. **Temporal / dynamic (CPPI):** distribute a risk budget *over time* between a
-   performance-seeking (risky) asset and a safe asset, subject to a floor or
-   maximum-drawdown constraint. Allocation to the risky asset is `m × (cushion)`,
-   where `cushion = (asset − floor)/asset` and `m` is the multiplier. This is the
-   EDHEC course's notion of risk budgeting and lives in the `dynamic/` package.
+1. **Cross-sectional, across assets (the core):** distribute total portfolio risk
+   *across assets* so each asset/group contributes its target share `bᵢ` at a point
+   in time. This is the ERC / risk-contribution optimizer above.
+2. **Cross-sectional, across factors (Deguest–Martellini–Meucci):** correlated
+   assets overstate diversification. Budget risk instead across *uncorrelated
+   factors* (PCA or minimum-torsion), and target the **Effective Number of Bets**.
+   See the diversification block below; lives in the `diversification/` package.
+3. **Temporal / dynamic (CPPI, LDI):** distribute a risk budget *over time* between
+   a performance-seeking and a safe asset, subject to a floor or maximum-drawdown
+   constraint. Allocation to the risky asset is `m × cushion`, where
+   `cushion = (asset − floor)/asset` and `m` is the multiplier. Generalizes to a
+   three-fund PSP / liability-hedging / safe-asset split (Martellini–Milhau). Lives
+   in the `dynamic/` package.
+
+Budgets may also be **conditional / state-dependent** (Martellini–Milhau–Tarelli):
+the target contributions `bᵢ` can be a function of an observable state variable
+(e.g. interest-rate level, yield-curve slope, valuation), falling back to ERC when
+no signal is present — addressing unconditional risk parity's structural bond
+overweight in changing rate regimes.
 
 ### Downside-risk vocabulary (analytics layer)
 
@@ -74,9 +94,42 @@ The system supports both, and they are complementary, not competing:
 - **GMV (global minimum variance):** `min wᵀΣw` s.t. weight constraints — needs only `Σ`.
 - **MSR (max Sharpe / tangency):** maximizes `(wᵀμ − r_f)/σ(w)` — needs expected returns `μ`.
 - **Efficient frontier:** the set of min-variance portfolios for each target return; plus equal-weight as a naive baseline.
+- **Efficient-MSR (Martellini 2008):** an MSR variant whose `μ` is a *risk-based proxy*
+  (total volatility / semi-deviation) rather than the unreliable sample mean.
 
 These require an **expected-returns** input that the core risk-budgeting path does
 not; see the additive contract in §5.
+
+### Diversification measurement & factor risk budgeting
+
+- **Diversification Ratio (Choueifaty–Coignard):** `DR(w) = (wᵀσ)/√(wᵀΣw)`. The
+  **Most Diversified Portfolio (MDP)** maximizes it.
+- **Effective Number of Bets, ENB (Meucci):** PCA the covariance, take each factor's
+  normalized risk contribution `pᵢ`, then `ENB = exp(−Σ pᵢ ln pᵢ)`. A diversification
+  score that is honest about correlation (unlike a naive count of holdings).
+- **Minimum-torsion bets (Meucci–Santangelo–Deguest):** raw PCA factors are unstable
+  (sign/ordering spin as `Σ` shifts). The minimum-torsion transform yields uncorrelated
+  factors as close as possible to the original assets — a stable basis for ENB and for
+  **factor risk budgeting** (budget risk across these factors).
+- **Max-ENB constructor (Deguest–Martellini–Meucci):** maximize ENB, or constrain
+  `ENB(w) ≥ k` on top of another objective.
+
+### Ensemble construction ("diversifying the diversifiers", Amenc–Goltz–Lodh–Martellini)
+
+Any single weighting scheme can suffer severe short-term underperformance from
+estimation/model risk. Blend several (GMV, Efficient-MSR, ERC, MDP, max-decorrelation)
+by averaging their normalized weights, optionally with a **tracking-error-control
+overlay** that shrinks the blend toward a reference (e.g. cap- or equal-weight) when
+ex-ante TE exceeds a target. This is EDHEC's "Diversified Multi-Strategy" and the
+primary model-risk-reduction lever.
+
+### Higher-moment estimation (Martellini–Ziemann)
+
+For non-normal assets, mean-variance is insufficient and naive sample co-skewness /
+co-kurtosis tensors are too noisy to help. Structured / shrinkage estimators of the
+higher-order comoments make higher-moment optimization pay off out-of-sample. Treated
+as an **advanced/optional** estimator (stretch), and it dovetails with the
+Cornish-Fisher VaR already in the analytics layer.
 
 ## 3. Technology choices
 
@@ -113,18 +166,25 @@ riskbudget/
   optimize/      # solvers + constraints
     convex.py        # cvxpy log-barrier risk-budget formulation
     scipy_solver.py  # SLSQP fallback
-    classical.py     # GMV, MSR (tangency), efficient frontier, equal-weight benchmarks
+    classical.py     # GMV, MSR, efficient frontier, equal-weight, Efficient-MSR benchmarks
+    conditional.py   # state-dependent / conditional risk budgets (Martellini–Milhau–Tarelli)
+    ensemble.py      # "diversifying the diversifiers" blend + tracking-error-control overlay
     constraints.py   # long-only, leverage, group caps, turnover
-  dynamic/       # temporal risk budgeting (EDHEC course module 4)
+  diversification/ # diversification measurement + factor risk budgeting
+    metrics.py       # Diversification Ratio, Effective Number of Bets (ENB)
+    torsion.py       # minimum-torsion transform → uncorrelated factors
+    constructors.py  # Most Diversified Portfolio, max-ENB, factor-risk-budget portfolios
+  dynamic/       # temporal risk budgeting (EDHEC course module 4 + Martellini–Milhau LDI)
     cppi.py          # constant proportion portfolio insurance + drawdown/floor variants
     allocators.py    # fixed-mix, glidepath, floor, drawdown allocators; bt_mix driver
+    fund_separation.py # three-fund PSP / liability-hedging / safe-asset allocator
   simulate/      # scenario generation
     gbm.py           # geometric Brownian motion paths; terminal_stats over scenarios
   analytics/     # metrics & attribution
     performance.py   # annualized return/vol, Sharpe, Sortino, max drawdown, turnover
     downside.py      # drawdown, semideviation, VaR (historic/Gaussian/Cornish-Fisher), CVaR
     distribution.py  # skewness, kurtosis, Jarque-Bera normality test
-    attribution.py   # risk-contribution time series, factor exposures
+    attribution.py   # risk-contribution time series, factor exposures, ENB / div-ratio over time
     summary.py       # summary_stats: canonical one-row-per-strategy metrics table
   reporting/     # tabular + chart report generation
     report.py
@@ -222,17 +282,20 @@ builds against interfaces, not each other's internals.
 | 0.5 | Core extension | additive `ExpectedReturns`/`MeanModel`/`PortfolioConstructor`/`Allocator` | 0 | 0.5 |
 | 1 | Data research | `docs/data-sources.md` + prototype adapter | 0 | 1 |
 | 2 | Data layer + simulation | `data/synthetic.py`, `data/csvsource.py`, `simulate/gbm.py` | 0 | 1 |
-| 3 | Risk + return models | `riskmodel/*` (incl. `returns_model.py`) | 0, 0.5 | 1 |
-| 4 | Budgeting + optimizers | `budgeting/*`, `optimize/*` (ERC + GMV/MSR/EF benchmarks) | 0, 0.5, 3 (iface) | 1 |
-| 6 | Analytics + reporting | `analytics/*`, `reporting/*` (full risk kit + summary_stats) | 0, 5 (iface) | 2 |
+| 3 | Risk + return models | `riskmodel/*` (incl. `returns_model.py`, risk-based μ) | 0, 0.5 | 1 |
+| 4 | Budgeting + optimizers | `budgeting/*`, `optimize/*` (ERC, GMV/MSR/EF, conditional, ensemble) | 0, 0.5, 3 (iface) | 1 |
+| 9 | Diversification + factor RB | `diversification/*` (ENB, min-torsion, MDP, max-ENB) | 0, 0.5 | 1 |
+| 6 | Analytics + reporting | `analytics/*`, `reporting/*` (full risk kit + ENB/DR + summary_stats) | 0, 5, 9 (iface) | 2 |
 | 5 | Backtester | `backtest/*` | 0, 2/3/4 (iface) | 2 |
-| 8 | Dynamic allocation | `dynamic/*` (CPPI, floor/drawdown/glidepath allocators) | 0, 0.5, 2 (iface) | 2 |
+| 8 | Dynamic allocation | `dynamic/*` (CPPI, allocators, PSP/LHP fund separation) | 0, 0.5, 2 (iface) | 2 |
 | 7 | API + dashboard | `api/*`, `dashboard/*`, `cli/*` | 0 + all | 3 |
 
 **Run order:** Wave 0 ✅ → **Wave 0.5** (core extension, quick) → Wave 1 (agents
-1, 2, 3, 4 in parallel) → Wave 2 (agents 5, 6, 8) → Wave 3 (agent 7). The
+1, 2, 3, 4, 9 in parallel) → Wave 2 (agents 5, 6, 8) → Wave 3 (agent 7). The
 data-research agent (1) runs concurrently; its provider pick is wired into
-`data/providers/` after it reports.
+`data/providers/` after it reports. Agent 4's `ensemble.py` consumes whatever
+constructors exist (GMV/MSR/ERC and, if present, Agent 9's MDP/max-ENB) and
+degrades gracefully if a method is absent, so 4 and 9 stay parallel.
 
 **Universal rules for every agent**
 - Implement only your package(s); do not modify another agent's internals.
@@ -250,7 +313,9 @@ data-research agent (1) runs concurrently; its provider pick is wired into
 - **Optimizers (classical):** GMV minimizes variance vs. random portfolios; MSR maximizes Sharpe on a toy 2-asset case with a known analytic tangency; efficient frontier is monotone and convex.
 - **Backtester:** reproducible equity curve on synthetic data; turnover and costs applied; no look-ahead (estimation uses only past window); runs any `PortfolioConstructor` (ERC, GMV, MSR, equal-weight) through one interface for head-to-head comparison.
 - **Analytics:** metrics match hand-computed references on a toy series; risk attribution sums to total risk; VaR ordering sanity (Cornish-Fisher ≥ Gaussian when left-skewed/fat-tailed); `summary_stats` reproduces the per-strategy table.
-- **Dynamic:** CPPI never breaches its floor on monotone-down synthetic paths; cushion/multiplier math matches a hand-worked step; floor and drawdown allocators respect their constraints.
+- **Diversification:** ENB of an equal-weight portfolio of `k` independent factors ≈ `k`; ENB ≤ N always; minimum-torsion factors are uncorrelated (off-diagonal of their correlation ≈ 0); MDP maximizes the diversification ratio vs. random portfolios; max-ENB ≥ ENB of GMV/equal-weight on a correlated fixture.
+- **Ensemble/conditional:** the blended weights equal the mean of constituent weights (and the TE overlay reduces ex-ante tracking error vs. the reference); conditional budgets reduce to ERC when the state signal is flat and shift as documented when it is not.
+- **Dynamic:** CPPI never breaches its floor on monotone-down synthetic paths; cushion/multiplier math matches a hand-worked step; floor and drawdown allocators respect their constraints; the three-fund PSP/LHP/safe allocator keeps the funding ratio above its floor on synthetic paths.
 - **Simulation:** GBM mean/vol of simulated log-returns match the parameterization within sampling error; `terminal_stats` summarizes scenarios correctly.
 - **API/dashboard:** `/construct` and `/backtest` endpoints return valid schemas; method selectable (ERC/GMV/MSR/equal-weight); dashboard renders weights, risk-contribution bars, equity curve, drawdown, and a summary-stats table.
 
@@ -279,19 +344,84 @@ future roadmap, not built now.
 
 ## 10. Roadmap (post-v1, explicitly deferred)
 
-The EDHEC course's later modules and its sequel ("Advanced Portfolio
-Construction") map to natural extensions we will *not* build in v1 but want to
-keep the architecture open to:
+Drawn from Martellini & co-authors' research and the EDHEC course sequel. We do
+*not* build these in v1 but keep interfaces extension-friendly for them.
 
-- **Asset-Liability Management / LDI:** funding ratio, present-value of
-  liabilities, duration matching, liability-hedging portfolios, and
-  liability-relative ("surplus") risk budgeting. The CIR short-rate model and bond
-  pricing sit here.
-- **Factor-based risk budgeting:** budget risk across *factors* (via the PCA /
-  fundamental factor model) rather than across assets — a direct extension of the
-  Agent 3 factor model plus the Agent 4 optimizer.
-- **Advanced estimation:** Black-Litterman expected returns, robust/DCC-GARCH
-  covariance, and Sharpe-style factor attribution.
+- **Goal-Based Investing engine** (Deguest–Martellini–Milhau): goals with priority
+  tiers (essential vs. aspirational) and required cash flows; allocate between a
+  goal-hedging portfolio (secures the essential floor) and the PSP; optimize/report
+  **probability of success** rather than mean-variance. Computable via state-grid
+  dynamic programming (Das–Ostrov–Radhakrishnan–Srivastav 2020) — §11.
+- **Asset-Liability Management / LDI:** funding ratio, present-value of liabilities,
+  duration matching, and liability-relative ("surplus") risk mode in the optimizer
+  (minimize surplus vol / maximize surplus Sharpe vs. a liability stream). CIR
+  short-rate model and bond pricing sit here. (The v1 `dynamic/fund_separation.py`
+  three-fund allocator is the entry point; full ALM is roadmap.)
+- **Smart-beta / factor-tilted sleeves** (Amenc–Goltz–Martellini): a two-stage
+  *selection → diversified-weighting* architecture so any factor tilt (value, size,
+  low-vol, momentum, quality) pairs with any constructor, avoiding score-weighted
+  concentration.
+- **Regime-robustness diagnostics:** report each constructor's performance
+  dispersion across market regimes; prefer the ensemble where dispersion is high.
+- **Full higher-moment optimization:** promote the advanced co-skewness/co-kurtosis
+  estimators (Martellini–Ziemann) into a polynomial-goal-programming / expected-
+  utility objective beyond the v1 estimator.
+- **Advanced estimation:** Black-Litterman / entropy-pooling views, robust/DCC-GARCH
+  covariance, conditioning risk budgets on richer macro state.
 
-These are listed so agents make interfaces extension-friendly, not so they build
-them now.
+## 11. Research provenance & sources
+
+Method → source map. All citations cross-verified across multiple independent
+indexers; publisher/SSRN/EDHEC pages return 403 to automated fetch, so full-text
+was not opened — titles/authors/years confirmed via concurring indexes. Items
+marked *(roadmap)* are deferred per §10.
+
+**Course basis**
+- EDHEC, *Introduction to Portfolio Construction and Analysis with Python*
+  (Martellini & Vaidyanathan) — https://www.coursera.org/learn/introduction-portfolio-construction-python
+- Public `edhec_risk_kit` reference impl — https://github.com/WongYatChun/Introduction_to_Portfolio_Construction_and_Analysis_with_Python
+
+**Cross-sectional risk budgeting (asset-level)**
+- ERC: Maillard, Roncalli & Teïletche, *JPM* 2010, 36(4):60–70 — https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1271972
+- Convex log-barrier solver: Spinu (2013) / Maillard–Roncalli–Teïletche (as above).
+
+**Factor risk budgeting & diversification (Agent 9)**
+- Deguest, Martellini & Meucci, "Risk Parity and Beyond," WP 2013 / *JPM* 2022, 48(4):108–135 — https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2355778
+- Meucci, "Managing Diversification" (ENB), *Risk* 2009 — https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1358533 · http://symmys.com/node/199
+- Meucci, Santangelo & Deguest, "Risk Budgeting and Diversification Based on Optimized Uncorrelated Factors" (min-torsion), WP 2015 — https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2276632
+- MDP / Diversification Ratio (Choueifaty & Coignard, TOBAM — *not* Martellini), *JPM* 2008, 35(1):40–51 — https://www.tobam.fr/wp-content/uploads/2014/12/TOBAM-JoPM-Maximum-Div-2008.pdf · follow-up https://papers.ssrn.com/sol3/papers.cfm?abstract_id=1895459
+
+**Classical / efficient benchmarks & expected returns (Agents 3–4)**
+- Martellini, "Toward the Design of Better Equity Benchmarks," *JPM* 2008, 34(4):34–41 — https://jpm.pm-research.com/content/34/4/34
+- Amenc, Goltz, Martellini & Retkowsky, "Efficient Indexation," *JOIM* 2011 — https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2066083
+
+**Ensemble construction (Agent 4 `ensemble.py`)**
+- Amenc, Goltz, Lodh & Martellini, "Diversifying the Diversifiers and Tracking the Tracking Error," *JPM* 2012, 38(3):72–88 — https://jpm.pm-research.com/content/38/3/72
+- Smart Beta 2.0: Amenc & Goltz, *J. Index Investing* 2013, 4(3):15–23 *(roadmap)* — https://jii.pm-research.com/content/4/3/15
+- Towards Smart Equity Factor Indices: Amenc, Goltz, Lodh & Martellini, *JPM* 2014, 40(4):106–122 *(roadmap)* — https://jpm.pm-research.com/content/40/4/106
+- Robustness of Smart Beta Strategies: Amenc, Goltz, Sivasubramanian & Lodh, *JII* 2015, 6(1):17–38 *(roadmap)* — https://jii.pm-research.com/content/6/1/17
+- Diversified or Concentrated Factor Tilts?: Amenc, Ducoulombier, Goltz, Lodh & Sivasubramanian, *JPM* 2016, 42(2):64–76 *(roadmap)* — https://jpm.pm-research.com/content/42/2/64
+
+**Conditional risk budgeting (Agent 4 `conditional.py`)**
+- Martellini, Milhau & Tarelli, "Toward Conditional Risk Parity," *J. Alternative Investments* 2015, 18(1):48–64 — https://jai.pm-research.com/content/18/1/48
+
+**Higher-moment estimation (Agent 3, advanced/stretch)**
+- Martellini & Ziemann, "Improved Estimates of Higher-Order Comoments and Implications for Portfolio Selection," *Review of Financial Studies* 2010, 23(4):1467–1502 — https://academic.oup.com/rfs/article-abstract/23/4/1467/1591232
+- Application: Hitaj, Martellini & Zambruno, "Optimal Hedge Fund Allocation…," EDHEC/JAI 2010 — https://www.top1000funds.com/wp-content/uploads/2012/02/EDHEC_Publication_Optimal_HF_Allocation.pdf
+
+**Dynamic allocation / LDI / fund separation (Agent 8 + roadmap)**
+- Martellini & Milhau, "Dynamic Allocation Decisions in the Presence of Funding Ratio Constraints," *J. Pension Economics & Finance* 2012, 11(4):549–580 — https://www.cambridge.org/core/journals/journal-of-pension-economics-and-finance
+- Amenc, Martellini, Milhau & Ziemann, "Asset-Liability Management in Private Wealth Management," *JPM* 2009, 36(1):100–120 — https://jpm.pm-research.com/content/36/1/100
+- Coqueret, Martellini & Milhau, "Equity Portfolios with Improved Liability-Hedging Benefits," *JPM* 2017, 43(2):37–49 — https://jpm.pm-research.com/content/43/2/37
+- Deguest, Martellini & Milhau, "Hedging vs. Insurance: Long-Horizon Investing with Short-Term Constraints," *Bankers, Markets & Investors* 2014 *(roadmap)*
+
+**Goal-based investing (roadmap)**
+- Deguest, Martellini, Milhau, Suri & Wang, "Introducing a Comprehensive Investment Framework for Goals-Based Wealth Management," EDHEC 2015 — https://www.globenewswire.com/news-release/2015/11/09/785040/0/en/New-conceptual-framework-to-better-achieve-individual-investors-goals.html
+- Deguest, Martellini & Milhau, *Goal-Based Investing: Theory and Practice*, World Scientific 2021 — https://ideas.repec.org/b/wsi/wsbook/12386.html
+- Das, Ostrov, Radhakrishnan & Srivastav, "Dynamic Portfolio Allocation in Goals-Based Wealth Management," *Computational Management Science* 2020, 17:613–640 (non-Martellini; the computational DP method) — https://link.springer.com/article/10.1007/s10287-019-00351-7
+
+*Verification caveat:* every publisher/SSRN/EDHEC domain returned HTTP 403 to the
+research agents' fetchers; citations were confirmed via agreement across two or more
+independent indexers (journal TOC pages, RePEc/IDEAS, Semantic Scholar, SciRP
+reference records), not by reading the rendered pages. No citation is fabricated;
+the few items resting only on a secondary index are flagged in the agent reports.
