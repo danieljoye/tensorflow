@@ -1,0 +1,131 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "riskbudget"
+version = "0.1.0"
+description = "Portfolio construction by risk budget rather than capital weight."
+readme = "riskbudget/README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Portfolio Risk Budgeting Team" }]
+keywords = ["risk parity", "risk budgeting", "portfolio", "ERC", "quant"]
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+
+# Runtime dependencies for the full system. The core/ package only needs
+# numpy + pandas, but the project as a whole pulls in the optimizer, API and
+# dashboard stacks. Downstream agents own the modules that use these.
+dependencies = [
+    "numpy>=1.26",
+    "pandas>=2.1",
+    "scipy>=1.11",
+    "cvxpy>=1.4",
+    "scikit-learn>=1.3",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+    "pydantic>=2.6",
+    "streamlit>=1.32",
+    "plotly>=5.20",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "ruff>=0.4",
+    "mypy>=1.9",
+    "pandas-stubs",
+]
+
+[project.urls]
+Homepage = "https://example.com/riskbudget"
+
+[tool.setuptools.packages.find]
+include = ["riskbudget*"]
+namespaces = false
+
+# ---------------------------------------------------------------------------
+# Tooling
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["riskbudget", "tests"]
+# This project lives inside a larger repository (TensorFlow). Restrict every
+# tool to the riskbudget package + its tests so `ruff check .` does not crawl
+# unrelated source trees.
+include = ["riskbudget/**/*.py", "tests/**/*.py", "pyproject.toml"]
+extend-exclude = ["tensorflow", "third_party", "tools", "util"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "C4",  # comprehensions
+    "SIM", # simplify
+    "RUF", # ruff-specific
+]
+ignore = [
+    "B008",   # function call in default arg (FastAPI Depends pattern)
+    "RUF001", # ambiguous unicode in identifiers — we use math notation (σ, ᵢ, Σ)
+    "RUF002", # ambiguous unicode in docstrings — finance/math notation is intentional
+    "RUF003", # ambiguous unicode in comments — ditto
+    "RUF022", # __all__ sort — we group exports (types / interfaces / errors) for clarity
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.11"
+# Left off: per-library override sections (cvxpy, sklearn, ...) are declared up
+# front for downstream waves but the core package does not import them yet, so
+# `warn_unused_configs` would emit spurious notes until those agents land.
+warn_unused_configs = false
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+no_implicit_optional = true
+strict_equality = true
+warn_return_any = true
+show_error_codes = true
+files = ["riskbudget"]
+
+# Third-party libraries without bundled type stubs.
+[[tool.mypy.overrides]]
+module = [
+    "scipy.*",
+    "cvxpy.*",
+    "sklearn.*",
+    "plotly.*",
+    "streamlit.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source = ["riskbudget"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
