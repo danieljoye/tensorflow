@@ -32,7 +32,9 @@ import numpy as np
 
 from riskbudget.core.errors import ConfigurationError
 from riskbudget.core.types import (
+    AllocatorParams,
     BacktestResult,
+    ExpectedReturns,
     Portfolio,
     PriceData,
     ReturnMatrix,
@@ -248,11 +250,97 @@ class Backtester(Protocol):
         ...
 
 
+@runtime_checkable
+class MeanModel(Protocol):
+    """Estimates expected (annualized) asset returns ``μ``.
+
+    The additive counterpart to :class:`RiskModel` (BUILD_PLAN §5.1): a
+    :class:`RiskModel` produces a covariance and a :class:`MeanModel` produces
+    the expected-returns vector the classical MSR / efficient-frontier
+    constructors need. Implementations include historical-mean, EWMA, and the
+    risk-based proxy ``μ`` of the Efficient-MSR benchmark (Agent 3,
+    ``riskmodel/returns_model.py``).
+    """
+
+    def estimate(self, returns: ReturnMatrix) -> ExpectedReturns:
+        """Return an :class:`ExpectedReturns` vector ordered to match ``returns.assets``.
+
+        Implementations should raise
+        :class:`~riskbudget.core.errors.RiskModelError` if a usable estimate
+        cannot be produced.
+        """
+        ...
+
+
+@runtime_checkable
+class PortfolioConstructor(Protocol):
+    """Constructs portfolio weights from a covariance and optional ``μ`` / budget.
+
+    The umbrella interface (BUILD_PLAN §5.1) that ERC, GMV, MSR, and
+    equal-weight all implement, so the backtester can run any method through one
+    contract. Which keyword inputs are required depends on the method: GMV needs
+    only ``cov``; MSR / efficient-frontier need ``mu``; the risk-budget (ERC)
+    path needs ``budget``. The existing :class:`Optimizer` is retained for the
+    pure risk-budget path; this generalizes it without changing that signature.
+    """
+
+    def construct(
+        self,
+        cov: np.ndarray,
+        *,
+        mu: ExpectedReturns | None = None,
+        budget: RiskBudget | None = None,
+        constraints: Constraints,
+    ) -> Portfolio:
+        """Return a :class:`Portfolio` for ``cov`` under ``constraints``.
+
+        ``cov`` (and ``mu`` / ``budget`` when supplied) must share one asset
+        ordering; alignment is reconciled via :meth:`ExpectedReturns.as_array`,
+        :meth:`RiskBudget.as_array`, and :meth:`Portfolio.as_array`.
+        Implementations should raise
+        :class:`~riskbudget.core.errors.OptimizationError` when the problem is
+        infeasible, the solver does not converge, or a required input
+        (``mu``/``budget``) for the chosen method is missing.
+        """
+        ...
+
+
+@runtime_checkable
+class Allocator(Protocol):
+    """Allocates a risk budget over *time* between a risky and a safe asset.
+
+    The dynamic / temporal sense of risk budgeting (BUILD_PLAN §2, §5.1): CPPI
+    and the drawdown/floor strategies (Agent 8, ``dynamic/``). ``safe`` may be
+    an explicit return series or a constant rate; allocation behaviour is driven
+    by :class:`AllocatorParams`.
+    """
+
+    def allocate(
+        self,
+        risky: ReturnMatrix,
+        safe: ReturnMatrix | float,
+        params: AllocatorParams,
+    ) -> BacktestResult:
+        """Run the dynamic allocation, returning a :class:`BacktestResult`.
+
+        ``safe`` is either a :class:`ReturnMatrix` of safe-asset returns aligned
+        to ``risky`` or a scalar per-period/annualized rate (the allocator
+        documents which); when omitted as a series it falls back to
+        ``params.safe_rate``. Implementations should raise
+        :class:`~riskbudget.core.errors.BacktestError` on unrecoverable
+        failures.
+        """
+        ...
+
+
 __all__ = [
+    "Allocator",
     "Backtester",
     "Constraints",
     "DataSource",
+    "MeanModel",
     "Optimizer",
+    "PortfolioConstructor",
     "RebalanceFrequency",
     "RebalanceSchedule",
     "RiskModel",

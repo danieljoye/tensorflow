@@ -345,6 +345,75 @@ class RiskBudget:
 
 
 # ---------------------------------------------------------------------------
+# Expected returns (μ)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ExpectedReturns:
+    """A vector of expected (annualized) returns ``μ``, keyed by asset id.
+
+    The classical optimizers that the core risk-budget path does not need —
+    max-Sharpe / tangency (MSR), the efficient frontier, and the Efficient-MSR
+    benchmark (BUILD_PLAN §5.1) — require an expected-returns input. This type
+    is the additive contract carrying that ``μ`` vector, aligned to an explicit
+    asset ordering exactly like :class:`RiskBudget` and :class:`Portfolio`.
+
+    Values are signed annualized returns: unlike a :class:`RiskBudget` they may
+    be negative or zero (an asset can be expected to lose money), and they do
+    *not* sum to one. The only requirement is that every value is finite.
+
+    Attributes
+    ----------
+    mu:
+        Mapping ``asset_id -> expected annualized return``. Insertion order
+        defines the canonical asset ordering for this vector.
+    """
+
+    mu: Mapping[str, float]
+
+    def __post_init__(self) -> None:
+        if not self.mu:
+            raise ValidationError("ExpectedReturns cannot be empty.")
+        if any(not np.isfinite(v) for v in self.mu.values()):
+            raise ValidationError("ExpectedReturns values must be finite.")
+        frozen = {str(k): float(v) for k, v in self.mu.items()}
+        if len(frozen) != len(self.mu):
+            raise ValidationError("ExpectedReturns has duplicate asset ids.")
+        object.__setattr__(self, "mu", frozen)
+
+    @property
+    def assets(self) -> list[str]:
+        """Ordered list of asset ids."""
+        return list(self.mu.keys())
+
+    def as_array(self, assets: Sequence[str] | None = None) -> np.ndarray:
+        """Return expected returns as a float vector ordered by ``assets``.
+
+        Parameters
+        ----------
+        assets:
+            Desired ordering. Defaults to this vector's own asset order. Must
+            cover exactly this vector's assets (no subset, no extras) so a
+            covariance matrix aligned to the same ``assets`` lines up element by
+            element.
+        """
+        order = list(self.mu.keys()) if assets is None else [str(a) for a in assets]
+        missing = [a for a in order if a not in self.mu]
+        if missing:
+            raise ValidationError(f"ExpectedReturns has no entry for assets: {missing}")
+        if len(order) != len(self.mu):
+            raise ValidationError(
+                "Requested ordering must cover exactly the expected-returns assets "
+                f"({len(self.mu)}), got {len(order)}."
+            )
+        return np.array([self.mu[a] for a in order], dtype=float)
+
+    def __len__(self) -> int:
+        return len(self.mu)
+
+
+# ---------------------------------------------------------------------------
 # Portfolio
 # ---------------------------------------------------------------------------
 
@@ -543,8 +612,75 @@ class BacktestResult:
         return self.equity_curve.index[-1]
 
 
+# ---------------------------------------------------------------------------
+# Dynamic-allocation parameters
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class AllocatorParams:
+    """Configuration for the dynamic (temporal) allocation layer (BUILD_PLAN §2).
+
+    These parameters drive CPPI and the drawdown/floor allocators (``dynamic/``,
+    Agent 8). The risky-asset allocation each period is ``m × cushion`` where
+    ``cushion = (asset − floor) / asset`` and ``m`` is the multiplier; a
+    drawdown variant ratchets the floor up to ``(1 − max_drawdown)`` of the
+    running peak. The remainder sits in the safe asset, which (absent a safe
+    return matrix) accrues at ``safe_rate``.
+
+    Attributes
+    ----------
+    multiplier:
+        The CPPI multiplier ``m`` (``> 0``). Allocation to the risky asset is
+        ``m × cushion``, typically capped/floored downstream. Larger ``m`` means
+        a more aggressive response to the cushion.
+    floor:
+        The protected wealth fraction (``0 <= floor < 1``) of the initial
+        account value below which the strategy aims not to fall. ``0.8`` means
+        protect 80% of starting wealth.
+    max_drawdown:
+        Optional maximum-drawdown limit (``0 < max_drawdown <= 1``) for the
+        drawdown variant, where the floor trails the running peak at
+        ``(1 − max_drawdown)``. ``None`` selects the plain fixed-floor CPPI.
+    safe_rate:
+        Annualized return of the safe asset used when no explicit safe-return
+        series is supplied to the allocator. Must be finite; defaults to ``0.0``.
+    start_value:
+        Initial account value the floor is measured against (``> 0``); defaults
+        to ``1.0`` (growth-of-$1 convention shared with
+        :class:`BacktestResult`).
+
+    Raises
+    ------
+    ValidationError
+        If any field is non-finite or outside its documented range.
+    """
+
+    multiplier: float = 3.0
+    floor: float = 0.8
+    max_drawdown: float | None = None
+    safe_rate: float = 0.0
+    start_value: float = 1.0
+
+    def __post_init__(self) -> None:
+        if not np.isfinite(self.multiplier) or self.multiplier <= 0:
+            raise ValidationError("AllocatorParams.multiplier must be finite and positive.")
+        if not np.isfinite(self.floor) or not (0.0 <= self.floor < 1.0):
+            raise ValidationError("AllocatorParams.floor must be finite and in [0, 1).")
+        if self.max_drawdown is not None and (
+            not np.isfinite(self.max_drawdown) or not (0.0 < self.max_drawdown <= 1.0)
+        ):
+            raise ValidationError("AllocatorParams.max_drawdown must be finite and in (0, 1].")
+        if not np.isfinite(self.safe_rate):
+            raise ValidationError("AllocatorParams.safe_rate must be finite.")
+        if not np.isfinite(self.start_value) or self.start_value <= 0:
+            raise ValidationError("AllocatorParams.start_value must be finite and positive.")
+
+
 __all__ = [
+    "AllocatorParams",
     "BacktestResult",
+    "ExpectedReturns",
     "Portfolio",
     "PriceData",
     "ReturnMatrix",

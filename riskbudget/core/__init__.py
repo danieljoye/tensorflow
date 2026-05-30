@@ -20,16 +20,21 @@ from riskbudget.core.errors import (
     ValidationError,
 )
 from riskbudget.core.interfaces import (
+    Allocator,
     Backtester,
     Constraints,
     DataSource,
+    MeanModel,
     Optimizer,
+    PortfolioConstructor,
     RebalanceFrequency,
     RebalanceSchedule,
     RiskModel,
 )
 from riskbudget.core.types import (
+    AllocatorParams,
     BacktestResult,
+    ExpectedReturns,
     Portfolio,
     PriceData,
     ReturnMatrix,
@@ -44,6 +49,8 @@ __all__ = [
     "PriceData",
     "RiskBudget",
     "Portfolio",
+    "ExpectedReturns",
+    "AllocatorParams",
     "BacktestResult",
     # interfaces
     "RebalanceFrequency",
@@ -52,6 +59,9 @@ __all__ = [
     "DataSource",
     "RiskModel",
     "Optimizer",
+    "PortfolioConstructor",
+    "MeanModel",
+    "Allocator",
     "Backtester",
     # errors
     "RiskBudgetError",

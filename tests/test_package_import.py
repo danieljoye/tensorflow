@@ -11,6 +11,8 @@ def test_version() -> None:
 
 def test_all_contracts_importable_from_core() -> None:
     from riskbudget.core import (  # noqa: F401
+        Allocator,
+        AllocatorParams,
         Backtester,
         BacktestError,
         BacktestResult,
@@ -18,9 +20,12 @@ def test_all_contracts_importable_from_core() -> None:
         Constraints,
         DataError,
         DataSource,
+        ExpectedReturns,
+        MeanModel,
         OptimizationError,
         Optimizer,
         Portfolio,
+        PortfolioConstructor,
         PriceData,
         RebalanceSchedule,
         ReturnMatrix,
@@ -29,4 +34,14 @@ def test_all_contracts_importable_from_core() -> None:
         RiskModel,
         RiskModelError,
         ValidationError,
+    )
+
+
+def test_wave_05_contracts_importable_from_core() -> None:
+    from riskbudget.core import (  # noqa: F401
+        Allocator,
+        AllocatorParams,
+        ExpectedReturns,
+        MeanModel,
+        PortfolioConstructor,
     )
