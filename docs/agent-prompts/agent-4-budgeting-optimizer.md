@@ -1,7 +1,8 @@
 # Agent 4 — Budgeting & Optimizer
 
 **Wave:** 1 (parallel). **Owns:** `riskbudget/budgeting/*`, `riskbudget/optimize/*`.
-**Depends on:** Agent 0 (`core/`), Agent 3's `RiskModel` interface (covariance input).
+**Depends on:** Agent 0 (`core/`), Agent 0.5 (`PortfolioConstructor`,
+`ExpectedReturns`), Agent 3's `RiskModel`/`MeanModel` interfaces (cov + μ input).
 
 ## Scope
 The heart of the system: turn a covariance + risk budget into weights.
@@ -19,15 +20,30 @@ The heart of the system: turn a covariance + risk budget into weights.
 5. `optimize/constraints.py` — `Constraints`: long-only, leverage/budget=target,
    group/sector caps, turnover limit (vs. a previous portfolio). Wire into both
    solvers where expressible.
+6. `optimize/classical.py` — benchmark constructors following the EDHEC course
+   formulations, each implementing `PortfolioConstructor`:
+   - **`equal_weight`** — naive 1/N baseline.
+   - **`gmv`** — global minimum variance (`min wᵀΣw` s.t. constraints); cov only.
+   - **`msr`** — max Sharpe / tangency (`max (wᵀμ − r_f)/σ`); needs `mu`
+     (`ExpectedReturns` from Agent 3) and a risk-free rate.
+   - **`efficient_frontier`** — trace min-variance weights across target returns
+     (the `minimize_vol`/`optimal_weights` pattern) and return the frontier.
+   These let the backtester compare ERC head-to-head against classical methods.
 
 ## Interfaces to honor
-`Optimizer.solve(cov, budget, constraints) -> Portfolio` from `core/interfaces.py`.
+`Optimizer.solve(cov, budget, constraints) -> Portfolio` for the risk-budget path,
+and `PortfolioConstructor.construct(cov, *, mu, budget, constraints) -> Portfolio`
+(from Agent 0.5) for the unified path that the classical constructors and the
+ERC optimizer both expose, so the backtester can drive any method through one
+interface.
 
 ## Deliverables
-Both solvers + contribution math + constraints, with tests: on a known 2–3 asset
-case the ERC solution has equal TRCs within tol; convex and scipy solutions agree
-within tol; arbitrary (non-equal) budgets are matched; constraints are respected
-(e.g. turnover cap reduces trade size). Use a fixed synthetic covariance fixture.
+Both solvers + contribution math + constraints + classical benchmarks, with tests:
+on a known 2–3 asset case the ERC solution has equal TRCs within tol; convex and
+scipy solutions agree within tol; arbitrary (non-equal) budgets are matched;
+constraints respected (e.g. turnover cap reduces trade size); GMV beats random
+portfolios on variance; MSR matches the analytic tangency on a toy 2-asset case;
+the efficient frontier is monotone/convex. Use fixed synthetic cov + μ fixtures.
 
 ## Out of scope
 Covariance estimation (Agent 3), backtesting (Agent 5). Do not change `core/`.

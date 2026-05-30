@@ -4,9 +4,11 @@ Self-contained prompts for each build agent of the Portfolio Risk Budgeting
 system. Each agent reads `docs/BUILD_PLAN.md` first, then its own prompt below.
 
 **Dispatch order**
-- Wave 0: Agent 0 (Foundation) — must finish first; it publishes `core/` contracts.
+- Wave 0: Agent 0 (Foundation) — ✅ done; published the `core/` contracts.
+- Wave 0.5: Agent 0.5 (Core extension) — quick additive contracts (`ExpectedReturns`,
+  `MeanModel`, `PortfolioConstructor`, `Allocator`). Must land before Wave 1.
 - Wave 1: Agents 1, 2, 3, 4 — run in parallel.
-- Wave 2: Agents 5, 6.
+- Wave 2: Agents 5, 6, 8.
 - Wave 3: Agent 7.
 
 Every prompt shares this **common preamble** (prepend when dispatching):
@@ -21,4 +23,5 @@ Every prompt shares this **common preamble** (prepend when dispatching):
 > network access (use the synthetic data source). When done, summarize what you
 > built and any contract friction you hit.
 
-Individual prompts: `agent-0-foundation.md` … `agent-7-api-dashboard.md`.
+Individual prompts: `agent-0-foundation.md`, `agent-0.5-core-extension.md`,
+`agent-1-data-research.md` … `agent-7-api-dashboard.md`, `agent-8-dynamic.md`.

@@ -13,11 +13,15 @@ Expose the whole pipeline to humans and services.
    - `POST /backtest` — given the above plus a date range and schedule, run a
      backtest and return metrics + (optionally) the equity curve.
    - `GET /health`.
-   Wire data → risk model → optimizer → backtester → analytics via the `core`
-   interfaces; select implementations by name (e.g. `risk_model="ledoit_wolf"`).
-3. `dashboard/app.py` — Streamlit UI: pick a universe, budget, risk model, and
-   date range; show weights, a risk-contribution chart, the equity curve, and the
-   summary metrics table. May call the API or the library directly.
+   Wire data → risk model → constructor → backtester → analytics via the `core`
+   interfaces; select implementations by name (e.g. `risk_model="ledoit_wolf"`,
+   `method="erc"|"gmv"|"msr"|"equal_weight"`). Expose a `POST /cppi` (or a
+   `dynamic` mode) for the Agent 8 allocators.
+3. `dashboard/app.py` — Streamlit UI: pick a universe, method, budget, risk model,
+   and date range; show weights, a risk-contribution chart, the equity curve, the
+   drawdown chart, and the `summary_stats` table — ideally comparing the chosen
+   risk-budget method against an equal-weight / GMV benchmark. May call the API or
+   the library directly.
 4. `cli/main.py` — `construct` and `backtest` subcommands mirroring the API,
    reading CSV input and writing JSON/report output.
 

@@ -14,7 +14,10 @@ Walk-forward simulation of a risk-budgeted strategy.
    applied at each rebalance.
 
 Must be deterministic given a seed/fixture and must compose any `RiskModel` +
-`Optimizer` passed in (don't hard-code estimator or solver).
+constructor passed in (don't hard-code estimator or solver). Accept any
+`PortfolioConstructor` (ERC, GMV, MSR, equal-weight from Agent 4) — not just the
+risk-budget `Optimizer` — so strategies can be compared head-to-head on the same
+data/schedule. MSR/EF runs also take a `MeanModel` for expected returns.
 
 ## Interfaces to honor
 `Backtester.run(data, model, optimizer, budget, schedule) -> BacktestResult`.
