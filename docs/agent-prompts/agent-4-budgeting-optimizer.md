@@ -11,12 +11,19 @@ The heart of the system: turn a covariance + risk budget into weights.
 2. `budgeting/budget.py` — `RiskBudget` helpers: per-asset budgets, per-group
    budgets expanded to assets, and the ERC default (`bᵢ = 1/N`). (The dataclass
    itself lives in `core`; this adds construction/validation utilities.)
-3. `optimize/convex.py` — the primary solver: cvxpy implementation of the
-   log-barrier formulation `min ½wᵀΣw − Σ bᵢ ln(wᵢ)` s.t. `w ≥ 0`, then rescale
-   to target leverage. Returns a `Portfolio`.
-4. `optimize/scipy_solver.py` — SLSQP fallback minimizing the sum of squared
-   risk-contribution deviations from budget; used as cross-check and when cvxpy
-   is unavailable.
+3. `optimize/ccd.py` — **the DEFAULT fast solver**: Spinu log-barrier cyclical
+   coordinate descent (BUILD_PLAN §12.1), pure NumPy. Per-coordinate update is the
+   positive root `xᵢ ← (aux + √(aux² + 4Σᵢᵢbᵢ))/(2Σᵢᵢ)`, `aux = xᵢΣᵢᵢ − (Σx)ᵢ`, with
+   rank-1 maintenance of `Σx`; stop on `maxᵢ|RCᵢ/ΣRC − bᵢ| < 1e-8`. Handles long-only +
+   bounds + leverage (final rescale). Cross-check against `pyrb`/`riskparity.py` values.
+4. `optimize/convex.py` — cvxpy log-barrier program for **non-separable** constraints
+   (group caps, turnover, arbitrary `Cw≤d`) that CCD can't express: `min ½wᵀΣw −
+   bᵀlog(w)` s.t. the linear constraints. `optimize/scipy_solver.py` — the same
+   log-barrier via `scipy.optimize` with analytic gradient `Σx − b/x` and Hessian
+   `Σ + diag(b/x²)`: the cross-check oracle + bounded separable path.
+4b. `optimize/router.py` — pick the cheapest path the `Constraints` allow: bounds/
+   long-only/leverage → `ccd.py`; group caps / turnover / general linear → `convex.py`;
+   scipy as oracle. This is what the `Optimizer.solve` implementation calls.
 5. `optimize/constraints.py` — `Constraints`: long-only, leverage/budget=target,
    group/sector caps, turnover limit (vs. a previous portfolio). Wire into both
    solvers where expressible.
@@ -24,8 +31,11 @@ The heart of the system: turn a covariance + risk budget into weights.
    formulations, each implementing `PortfolioConstructor`:
    - **`equal_weight`** — naive 1/N baseline.
    - **`gmv`** — global minimum variance (`min wᵀΣw` s.t. constraints); cov only.
-   - **`msr`** — max Sharpe / tangency (`max (wᵀμ − r_f)/σ`); needs `mu`
-     (`ExpectedReturns` from Agent 3) and a risk-free rate.
+     Keep the closed-form `σ_gmv = √(1/Σ pinv(Σ))` as a sanity check.
+   - **`msr`** — max Sharpe / tangency. Use the **Cornuéjols–Tütüncü variable
+     substitution** (BUILD_PLAN §12.2), NOT a naive fractional-Sharpe maximization:
+     `min wᵀΣw` s.t. `(μ−r_f)ᵀw = 1`, `Σw = k`, `k ≥ 0`; recover `w = w*/k`. Guard
+     `max(μ) > r_f`. Needs `mu` (from Agent 3) and a risk-free rate.
    - **`efficient_msr`** — MSR using Agent 3's **risk-based / volatility-proxy** `mu`
      instead of sample means (Martellini 2008 / Efficient Indexation). Cite in docstring.
    - **`efficient_frontier`** — trace min-variance weights across target returns

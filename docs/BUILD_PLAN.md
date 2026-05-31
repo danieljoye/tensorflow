@@ -54,8 +54,23 @@ For a weight vector `w` and covariance matrix `Σ`:
 Spinu): minimize `½ wᵀ Σ w − Σᵢ bᵢ · ln(wᵢ)` subject to `w ≥ 0`, then rescale so
 weights sum to the target leverage. This is convex, has a unique solution, and is
 far more robust than Newton root-finding on the risk-contribution residuals.
-`cvxpy` is the primary backend; a `scipy.optimize` SLSQP path is the dependency-light
-fallback and a cross-check in tests.
+
+**Three solver paths, cheapest-that-fits** (validated against the `riskparity.py`
+and `pyrb` reference implementations — see §11, §12):
+1. **`ccd.py` — Spinu cyclical coordinate descent (DEFAULT, fast path).** Exact,
+   pure-NumPy, converges in a few sweeps; handles long-only + bounds + leverage
+   (via final rescale). The per-coordinate update is the positive root of a scalar
+   quadratic — formula in §12.1.
+2. **`scipy_solver.py` — log-barrier via `scipy.optimize`** with analytic gradient
+   `Σx − b/x` and Hessian `Σ + diag(b/x²)`; the cross-check oracle and the bounded
+   separable path.
+3. **`convex.py` — `cvxpy` log-barrier program** for genuinely non-separable
+   constraints (group caps, turnover, arbitrary `Cw≤d`) that CCD cannot express.
+
+The `Optimizer` routes to the cheapest path the `Constraints` allow (mirroring
+pyrb's `_lambda_solve`). An optional expected-return tilt `c·σ(w) − πᵀw`
+(Roncalli) is supported by the CCD path. CVaR / tail-risk budgeting is **roadmap**
+(neither reference implements it; needs a Rockafellar–Uryasev LP — §10).
 
 ### Three senses of "risk budgeting"
 
@@ -99,6 +114,22 @@ overweight in changing rate regimes.
 
 These require an **expected-returns** input that the core risk-budgeting path does
 not; see the additive contract in §5.
+
+### Views-based expected returns — Black-Litterman (v1)
+
+Black-Litterman blends a **market-equilibrium prior** with subjective **views** to
+produce posterior expected returns that are far more stable than raw sample means —
+making it the natural `μ` source for the MSR / efficient-frontier / mean-variance
+paths. Pipeline (formulas in §12.7):
+- **Prior** by reverse optimization: `Π = δ·Σ·w_mkt` from market-cap weights and a
+  market-implied risk-aversion `δ`.
+- **Views** `(P, Q, Ω)`: `P` picks the assets, `Q` the view returns, `Ω` the view
+  uncertainty (He–Litterman default `Ω = diag(diag(τPΣPᵀ))`, or Idzorek confidences).
+- **Posterior** returns `E(R)` and covariance via the He–Litterman master formula,
+  solved as a linear system (not a matrix inverse) for numerical stability.
+
+Implemented as a `MeanModel`-shaped component (posterior `ExpectedReturns`) plus a
+posterior covariance; its weights can also be read directly via `w=(δΣ)⁻¹E(R)`.
 
 ### Diversification measurement & factor risk budgeting
 
@@ -156,24 +187,31 @@ riskbudget/
     providers/       # real provider adapters (added after data-research agent)
   riskmodel/     # covariance + expected-return estimators
     sample.py        # sample covariance
-    ewma.py          # exponentially-weighted
-    shrinkage.py     # Ledoit-Wolf
+    ewma.py          # exponentially-weighted covariance (exp_cov, span≈180)
+    semicov.py       # downside semicovariance
+    shrinkage.py     # Ledoit-Wolf (constant-variance + constant-correlation), OAS
     factor.py        # statistical (PCA) factor model
-    returns_model.py # expected returns: historical mean, EWMA, CAPM-implied (for MSR/EF)
+    psd.py           # nearest-PSD fix (spectral eigenvalue clipping) — applied to EVERY cov output
+    returns_model.py # expected returns: historical mean, EWMA, CAPM-implied, risk-based proxy
+    black_litterman.py # views-based posterior returns + covariance (prior, P/Q/Ω, master formula)
   budgeting/     # risk-contribution math + budget specification
     contributions.py # MRC/TRC, risk decomposition
     budget.py        # RiskBudget spec (per-asset, per-group, ERC default)
   optimize/      # solvers + constraints
-    convex.py        # cvxpy log-barrier risk-budget formulation
-    scipy_solver.py  # SLSQP fallback
-    classical.py     # GMV, MSR, efficient frontier, equal-weight, Efficient-MSR benchmarks
+    ccd.py           # Spinu cyclical coordinate descent — DEFAULT fast risk-budget solver
+    convex.py        # cvxpy log-barrier program (group caps / turnover / general linear)
+    scipy_solver.py  # log-barrier via scipy — cross-check oracle + bounded path
+    router.py        # picks the cheapest solver the Constraints allow
+    classical.py     # GMV, MSR (Cornuéjols–Tütüncü), efficient frontier, equal-weight, Efficient-MSR
     conditional.py   # state-dependent / conditional risk budgets (Martellini–Milhau–Tarelli)
     ensemble.py      # "diversifying the diversifiers" blend + tracking-error-control overlay
     constraints.py   # long-only, leverage, group caps, turnover
   diversification/ # diversification measurement + factor risk budgeting
-    metrics.py       # Diversification Ratio, Effective Number of Bets (ENB)
-    torsion.py       # minimum-torsion transform → uncorrelated factors
+    metrics.py       # Diversification Ratio, Effective Number of Bets (ENB) + entropy guard
+    torsion.py       # minimum-torsion transform (polar iteration on the correlation root)
     constructors.py  # Most Diversified Portfolio, max-ENB, factor-risk-budget portfolios
+  clustered/     # hierarchical / clustered allocation (López de Prado)
+    hrp.py           # Hierarchical Risk Parity (v1: corr-distance → linkage → quasi-diag → bisection)
   dynamic/       # temporal risk budgeting (EDHEC course module 4 + Martellini–Milhau LDI)
     cppi.py          # constant proportion portfolio insurance + drawdown/floor variants
     allocators.py    # fixed-mix, glidepath, floor, drawdown allocators; bt_mix driver
@@ -282,9 +320,9 @@ builds against interfaces, not each other's internals.
 | 0.5 | Core extension | additive `ExpectedReturns`/`MeanModel`/`PortfolioConstructor`/`Allocator` | 0 | 0.5 |
 | 1 | Data research | `docs/data-sources.md` + prototype adapter | 0 | 1 |
 | 2 | Data layer + simulation | `data/synthetic.py`, `data/csvsource.py`, `simulate/gbm.py` | 0 | 1 |
-| 3 | Risk + return models | `riskmodel/*` (incl. `returns_model.py`, risk-based μ) | 0, 0.5 | 1 |
+| 3 | Risk + return models | `riskmodel/*` (cov + PSD-fix, return models, Black-Litterman) | 0, 0.5 | 1 |
 | 4 | Budgeting + optimizers | `budgeting/*`, `optimize/*` (ERC, GMV/MSR/EF, conditional, ensemble) | 0, 0.5, 3 (iface) | 1 |
-| 9 | Diversification + factor RB | `diversification/*` (ENB, min-torsion, MDP, max-ENB) | 0, 0.5 | 1 |
+| 9 | Diversification + factor RB | `diversification/*` (ENB, min-torsion, MDP, max-ENB) + `clustered/hrp.py` | 0, 0.5 | 1 |
 | 6 | Analytics + reporting | `analytics/*`, `reporting/*` (full risk kit + ENB/DR + summary_stats) | 0, 5, 9 (iface) | 2 |
 | 5 | Backtester | `backtest/*` | 0, 2/3/4 (iface) | 2 |
 | 8 | Dynamic allocation | `dynamic/*` (CPPI, allocators, PSP/LHP fund separation) | 0, 0.5, 2 (iface) | 2 |
@@ -308,7 +346,7 @@ degrades gracefully if a method is absent, so 4 and 9 stay parallel.
 
 - **Foundation:** `pip install -e .` works; `pytest` runs (even if empty); CI green; all interfaces importable.
 - **Data:** synthetic generator produces a covariance-consistent return matrix; CSV round-trips; adapters satisfy `DataSource`.
-- **Risk model:** estimators return symmetric PSD matrices; shrinkage reduces condition number on ill-conditioned input; cross-checked vs. numpy reference.
+- **Risk model:** estimators return symmetric PSD matrices (the PSD fix repairs a deliberately indefinite input); shrinkage reduces condition number on ill-conditioned input; **Black-Litterman with empty views returns the prior `Π`, a confident view moves the posterior toward `Q`, and the posterior is computed by solving a linear system (no explicit inverse)**; cross-checked vs. numpy reference.
 - **Budgeting/optimizer:** for ERC on a known 2–3 asset case, solved TRCs are equal within tol; convex and scipy solvers agree; constraints respected.
 - **Optimizers (classical):** GMV minimizes variance vs. random portfolios; MSR maximizes Sharpe on a toy 2-asset case with a known analytic tangency; efficient frontier is monotone and convex.
 - **Backtester:** reproducible equity curve on synthetic data; turnover and costs applied; no look-ahead (estimation uses only past window); runs any `PortfolioConstructor` (ERC, GMV, MSR, equal-weight) through one interface for head-to-head comparison.
@@ -317,7 +355,7 @@ degrades gracefully if a method is absent, so 4 and 9 stay parallel.
 - **Ensemble/conditional:** the blended weights equal the mean of constituent weights (and the TE overlay reduces ex-ante tracking error vs. the reference); conditional budgets reduce to ERC when the state signal is flat and shift as documented when it is not.
 - **Dynamic:** CPPI never breaches its floor on monotone-down synthetic paths; cushion/multiplier math matches a hand-worked step; floor and drawdown allocators respect their constraints; the three-fund PSP/LHP/safe allocator keeps the funding ratio above its floor on synthetic paths.
 - **Simulation:** GBM mean/vol of simulated log-returns match the parameterization within sampling error; `terminal_stats` summarizes scenarios correctly.
-- **API/dashboard:** `/construct` and `/backtest` endpoints return valid schemas; method selectable (ERC/GMV/MSR/equal-weight); dashboard renders weights, risk-contribution bars, equity curve, drawdown, and a summary-stats table.
+- **API/dashboard:** `/construct` and `/backtest` endpoints return valid schemas; method selectable across the full set (ERC/risk-budget, GMV, MSR, Efficient-MSR, Black-Litterman, MDP, max-ENB, HRP, ensemble, equal-weight); dashboard renders weights, risk-contribution bars, ENB/diversification-ratio, equity curve, drawdown, and a summary-stats table comparing the chosen method against a benchmark.
 
 ## 8. Data-source decision (owned by Agent 1)
 
@@ -366,8 +404,18 @@ Drawn from Martellini & co-authors' research and the EDHEC course sequel. We do
 - **Full higher-moment optimization:** promote the advanced co-skewness/co-kurtosis
   estimators (Martellini–Ziemann) into a polynomial-goal-programming / expected-
   utility objective beyond the v1 estimator.
-- **Advanced estimation:** Black-Litterman / entropy-pooling views, robust/DCC-GARCH
-  covariance, conditioning risk budgets on richer macro state.
+- **Advanced estimation:** entropy-pooling views (a Black-Litterman generalization),
+  robust/DCC-GARCH covariance, conditioning risk budgets on richer macro state.
+  (Black-Litterman itself is **v1** — §2, §12.7 — not roadmap.)
+- **Clustered allocation beyond HRP:** Nested Clustered Optimization (NCO) and
+  HERC/HERC2 (López de Prado; Raffinot), optimal-`k` selection (gap statistic /
+  silhouette), and DBHT linkage. v1 ships plain HRP only.
+- **Risk-measure-pluggable budgeting:** extend risk budgeting beyond volatility to
+  CVaR, CDaR, EVaR, MAD, etc. (Rockafellar–Uryasev LP for CVaR; the Riskfolio-Lib
+  `rmeasures` set is the target list). v1 is volatility-based.
+- **Critical Line Algorithm (CLA):** Markowitz/Bailey–López de Prado exact-frontier
+  tracer — a solver-free NumPy cross-check of the cvxpy frontier; promote from §12
+  note to a built optimizer if exact turning points are needed.
 
 ## 11. Research provenance & sources
 
@@ -425,3 +473,65 @@ research agents' fetchers; citations were confirmed via agreement across two or 
 independent indexers (journal TOC pages, RePEc/IDEAS, Semantic Scholar, SciRP
 reference records), not by reading the rendered pages. No citation is fabricated;
 the few items resting only on a secondary index are flagged in the agent reports.
+
+**Reference implementations (algorithmic provenance).** This environment's network
+allowlist blocks publisher PDFs but permits GitHub/PyPI, so the *algorithms* in §12
+were read directly from these peer-reviewed open-source implementations (commit
+pinned; read-only). These are the source of the concrete update equations, not of
+the financial theory (that is cited above).
+- `convexfi/riskparity.py` @ `39e6120` — Spinu CCD + Feng–Palomar SCA. Papers in-repo: Spinu (2013) SSRN 2297383; Griveau-Billion–Richard–Roncalli (2013) arXiv:1311.4057; Feng–Palomar (2015) IEEE TSP 63(19); Choi–Chen (2022).
+- `jcrichard/pyrb` @ `250054e` — constrained risk budgeting. In-repo: Richard–Roncalli (2019) SSRN 3331184; Roncalli (2015) expected-returns extension.
+- `reckziegel/uncorbets` @ `e128271` — minimum-torsion + ENB. In-repo: Meucci–Santangelo–Deguest, SSRN 2276632.
+- `dcajasn/Riskfolio-Lib` @ `2ed0167` — HRP/NCO/HERC + risk-measure set. In-repo: López de Prado (2016, 2019); Raffinot (2017, 2018); Pfitzinger–Katzke (2019).
+- `robertmartin8/PyPortfolioOpt` @ `c524c6e` — efficient frontier, CLA, Black-Litterman, estimators. In-repo: Cornuéjols–Tütüncü (2006); Ledoit–Wolf (2003, 2001); Chen et al. (2010) OAS; He–Litterman (1999/2002); Idzorek (2007); Bailey–López de Prado (2013).
+
+## 12. Numerical methods appendix (reference-implementation-derived)
+
+Concrete formulas extracted from the implementations in §11. Agents must reproduce
+these and cross-check against the cited reference where possible.
+
+**12.1 Spinu log-barrier CCD (default risk-budget solver — `optimize/ccd.py`).**
+Objective over `x>0`: `f(x)=½xᵀΣx − Σᵢ bᵢ ln xᵢ`; final weights `w=x/Σx`.
+Per-coordinate update (positive root of the scalar quadratic `Σᵢᵢxᵢ² + (Σx)₋ᵢxᵢ − bᵢ = 0`):
+`xᵢ ← (aux + √(aux² + 4·Σᵢᵢ·bᵢ)) / (2·Σᵢᵢ)`, where `aux = xᵢΣᵢᵢ − (Σx)ᵢ`.
+Maintain `Σx` by rank-1 update after each coordinate moves. Init `x = √(1/Σ.sum())·1`.
+Stop when `maxᵢ |RCᵢ/ΣRC − bᵢ| < 1e-8` (`RCᵢ = xᵢ(Σx)ᵢ`), `maxiter≈200`. Optional
+expected-return tilt → use the std-dev-measure variant `f = c·σ(x) − πᵀx − λ Σ bᵢ ln xᵢ`.
+
+**12.2 Max-Sharpe via Cornuéjols–Tütüncü substitution (`optimize/classical.py`).**
+Do NOT maximize the fractional Sharpe directly. Solve the convex QP: `min wᵀΣw` s.t.
+`(μ−r_f)ᵀw = 1`, `Σw = k`, `k ≥ 0`, with all linear constraints scaled by `k`;
+recover `w_real = w/k`. Requires `max(μ) > r_f`. GMV sanity value: `σ_gmv = √(1/Σ pinv(Σ))`.
+
+**12.3 Nearest-PSD fix (`riskmodel/psd.py`, applied to every covariance output).**
+PSD test = Cholesky of `Σ + 1e-16·I`. Spectral repair: `Σ = V·diag(max(λ,0))·Vᵀ`
+from `eigh(Σ)`. This is mandatory before any inversion (GMV/MSR/BL) or QP solve.
+
+**12.4 Minimum-torsion transform (`diversification/torsion.py`).**
+Let `s=√diag(Σ)`, correlation `C`, and `c = sqrtm(C)` the **symmetric** (eigendecomp)
+root — not Cholesky. Polar fixed-point iteration: init `d=1`; repeat
+`U=diag(d)·C·diag(d)`, `u=sqrtm(U)`, `q=u⁻¹·diag(d)·c`, `d=diag(q·c)`, `π=diag(d)·q`;
+stop when `|‖c−π‖_F change| / ‖c−π‖_F / n ≤ 1e-8`. Torsion `t = diag(s)·(π·c⁻¹)·diag(1/s)`.
+(Approximate one-shot: `t = diag(s)·C^{-1/2}·diag(1/s)`.)
+
+**12.5 Effective Number of Bets (`diversification/metrics.py`).**
+Diversification distribution `p = (tᵀ)⁻¹b ⊙ (t·Σ·b) / (bᵀΣb)` (so `Σpᵢ=1`);
+`ENB = exp(−Σ pᵢ ln pᵢ)`. Entropy guard: replace `pᵢ ln pᵢ` with
+`pᵢ ln(1 + (pᵢ−1)·[pᵢ>1e-5])` to avoid `ln(0)`. Sanity: `1/N` over `N` uncorrelated
+unit-variance assets ⇒ `ENB≈N`; fully correlated ⇒ `ENB≈1`.
+
+**12.6 HRP (`clustered/hrp.py`).** Distance `Dᵢⱼ=√(½(1−ρᵢⱼ))` → `scipy.cluster.hierarchy.linkage`
+→ `leaves_list` quasi-diagonalization → recursive bisection splitting capital
+inversely to cluster risk, inverse-variance weights within clusters. No matrix
+inversion (works on singular Σ).
+
+**12.7 Black-Litterman (`riskmodel/black_litterman.py`).**
+- Prior (reverse optimization): `Π = δ·Σ·w_mkt` (+`r_f`); market-implied
+  `δ = (E[R_m] − r_f)/σ_m²`.
+- Posterior returns (He–Litterman, solved as a linear system, NOT by inverting):
+  let `τΣP = τ·Σ·Pᵀ`, `A = P·(τΣP) + Ω`, `b = Q − P·Π`; then
+  `E(R) = Π + (τΣP)·solve(A, b)` (fall back to `lstsq` if `A` singular).
+- Posterior covariance: `Σ_post = Σ + [τΣ − (τΣP)·solve(A, (τΣP)ᵀ)]`.
+- Default view uncertainty: `Ω = diag(diag(τ·P·Σ·Pᵀ))` (τ cancels); Idzorek option
+  maps a per-view confidence∈[0,1] to `Ω`. Implied weights `w = (δΣ)⁻¹·E(R)`,
+  normalized. Defaults `τ=0.05`. Absolute-views dict → one-hot `P`, `Q`.
