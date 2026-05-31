@@ -10,12 +10,12 @@ and prove it works end to end (BUILD_PLAN §3.1, §5.2).
 1. `spec.py` — **`StrategySpec`** (pydantic v2): the complete definition of a run —
    universe/assets, data-source choice, `risk_model`, `mean_model` (incl.
    `black_litterman` + its views), `method`, `budget`, `Constraints`,
-   `RebalanceSchedule`, cost model, and `seed`. Validate it (raise `ConfigError` on
+   `RebalanceSchedule`, cost model, and `seed`. Validate it (raise `ConfigurationError` on
    bad/unknown fields). This is the single object every surface accepts.
 2. `registry.py` — string→factory maps for risk models, mean models, portfolio
    constructors, and allocators. Import each implementation's documented public
    factories (per the §5.2 naming convention the Wave 1–2 agents exposed) and register
-   them in one place. Unknown name → `ConfigError` listing valid options. Do NOT
+   them in one place. Unknown name → `ConfigurationError` listing valid options. Do NOT
    re-implement methods; only wire existing ones.
 3. `compare.py` — given one or more `StrategySpec`s and a dataset, run the panel of
    methods through the backtester (Agent 5) and return a `summary_stats` (Agent 6)
@@ -36,7 +36,7 @@ internals. Honor §3.1 conventions and the error taxonomy.
 ## Deliverables
 spec + registry + compare + public API + example + integration tests, with: a
 `StrategySpec` round-trips through `construct`/`backtest`/`compare`; the registry
-resolves every method name (and raises `ConfigError` on unknown); the golden-path
+resolves every method name (and raises `ConfigurationError` on unknown); the golden-path
 example runs in CI offline; `import riskbudget` works without dev deps. Reconcile with
 Agent 7 (API/dashboard should call the registry rather than duplicate wiring).
 

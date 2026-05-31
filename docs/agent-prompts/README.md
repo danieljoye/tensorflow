@@ -22,7 +22,8 @@ Every prompt shares this **common preamble** (prepend when dispatching):
 > and §3.1 conventions exactly — if a contract is wrong, stop and report it rather
 > than forking it. Expose your public methods as factory callables under the §5.2
 > names so the registry can find them. Deliver implementation + tests (unit + at least
-> one property-based invariant test; optional skippable cross-check vs. the reference
+> one invariant test as a deterministic seeded sweep — `hypothesis` is not installed;
+> optional skippable cross-check vs. the reference
 > lib where one exists) + type hints + docstrings citing the §11/§12 source. **Run all
 > gates via `.venv/bin/...`** (the base interpreter lacks the deps): `ruff check`,
 > `ruff format --check`, `mypy`, `pytest` — all green, no network (use synthetic data).
