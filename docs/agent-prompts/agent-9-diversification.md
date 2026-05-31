@@ -45,7 +45,10 @@ Metrics + min-torsion + constructors + HRP, with tests: ENB of equal-weight over
 independent factors ≈ `k`; ENB ≤ N always; min-torsion factors are uncorrelated
 (off-diagonal correlation ≈ 0); MDP beats random portfolios on `DR`; max-ENB ≥ ENB
 of GMV/equal-weight on a correlated fixture; HRP weights are positive, sum to 1, and
-require no matrix inversion (works on a singular Σ). Use fixed synthetic-cov fixtures.
+require no matrix inversion (works on a singular Σ). Include a property-based test of
+the ENB bounds (`1 ≤ ENB ≤ N`). Add an **optional skippable cross-check**
+(`pytest.importorskip("pypfopt")`) of HRP against `pyportfolioopt`'s `HRPOpt`, and of
+min-torsion/ENB against the `reckziegel/uncorbets` test vectors. Use fixed synthetic-cov fixtures.
 
 ## Out of scope
 Asset-level ERC and classical optimizers (Agent 4 — but your constructors and theirs

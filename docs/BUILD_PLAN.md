@@ -172,6 +172,46 @@ Cornish-Fisher VaR already in the analytics layer.
 - **Dashboard:** Streamlit + Plotly
 - **Tooling:** pytest (+pytest-cov), ruff (lint+format), mypy (typing)
 - **Packaging:** pyproject.toml, src-less layout rooted at `riskbudget/`
+- **Optional dev-only cross-check deps:** `riskparityportfolio`, `pyportfolioopt`,
+  `pyrb` — used **only** in skippable tests (`pytest.importorskip`) to validate our
+  implementations against the reference libraries (see §7). NEVER runtime deps. They
+  live in a `crosscheck` optional extra in `pyproject.toml` owned by **Agent 11** (one
+  owner, to avoid concurrent edits); Wave 1 agents just write `importorskip` tests that
+  skip cleanly when the extra isn't installed.
+
+### 3.1 Conventions & non-functional requirements
+
+Shared rules so the agents don't diverge. These are binding.
+
+- **Return convention:** simple (arithmetic) returns are the default for weighting,
+  covariance, and backtest compounding; log returns are available via
+  `PriceData.to_returns("log")` and used where additive aggregation matters. A
+  function's docstring must state which it expects.
+- **Annualization:** `periods_per_year` defaults to **252** (daily), configurable
+  (52 weekly, 12 monthly). Vol scales by `√periods`, returns by `periods`
+  (arithmetic) or compounding `(1+r)^periods − 1` (geometric).
+- **Risk-free rate:** annualized, default 0.0; deannualize consistently when used
+  per-period (Sharpe, MSR, CPPI safe asset).
+- **Numerical tolerances:** budget/weight sum check `1e-8`; risk-budget solver
+  convergence `1e-8` on max relative risk-contribution error; treat `|x|<1e-12` as 0.
+- **Determinism:** every stochastic path (synthetic data, GBM, any resampling) takes
+  an explicit `seed`/`rng`; no implicit global RNG. Same inputs ⇒ identical outputs.
+- **Long-only nature of risk budgeting:** the log-barrier / CCD risk-budget solver
+  requires `w > 0`, so **cross-sectional risk budgeting is inherently long-only**.
+  Shorting/leverage with negative weights is supported **only** on the classical
+  (GMV/MSR/EF) and ensemble paths; the risk-budget `Optimizer` must raise
+  `OptimizationError` if asked to permit shorting. Document this prominently.
+- **Scale targets (v1):** correctness up to ~**500 assets** and ~**5,000 periods**;
+  CCD/closed-form paths should stay sub-second at N=500; cvxpy paths may be slower
+  and are acceptable for the constrained cases.
+- **Error taxonomy** (subclasses of `RiskBudgetError` in `core/errors.py`):
+  `DataError` (bad/missing input data), `EstimationError` (risk/return model failure),
+  `OptimizationError` (infeasible / non-convergent / unsupported constraint),
+  `ConfigError` (invalid `StrategySpec` / unknown method name). Each layer raises its
+  own; never let raw numpy/cvxpy exceptions escape the public API.
+- **Public API:** `riskbudget/__init__.py` curates a stable top-level surface
+  (core types + a `construct()` / `backtest()` / `compare()` convenience layer);
+  internal module paths may change, the curated surface should not.
 
 ## 4. Repository layout
 
@@ -226,6 +266,9 @@ riskbudget/
     summary.py       # summary_stats: canonical one-row-per-strategy metrics table
   reporting/     # tabular + chart report generation
     report.py
+  spec.py        # StrategySpec: the one config object that defines a run (see §5.2)
+  registry.py    # name -> implementation registry for methods/models (see §5.2)
+  compare.py     # run a panel of methods on one dataset -> comparison table (head-to-head)
   api/           # FastAPI service
     app.py
     schemas.py
@@ -233,7 +276,9 @@ riskbudget/
     app.py
   cli/           # command-line entry points
     main.py
-tests/           # mirrors package layout; pytest
+  __init__.py    # curated public API: core types + construct()/backtest()/compare()
+examples/        # runnable "golden path" scripts (offline, synthetic data)
+tests/           # mirrors package layout; pytest (unit, property-based, integration, optional cross-checks)
 docs/
   BUILD_PLAN.md          # this file
   data-sources.md        # produced by the data-research agent
@@ -309,6 +354,30 @@ backtester can run any method through one interface. This Wave 0.5 touch-up is a
 small, self-contained task (extend `core/`, keep everything importable and green)
 to run before Wave 1 dispatches.
 
+### 5.2 StrategySpec & the method registry (the glue)
+
+To stop the API, CLI, dashboard, backtester, and `compare()` from each inventing
+their own wiring, there is ONE config object and ONE name→implementation registry.
+
+- **`spec.py` — `StrategySpec`** (pydantic): the complete definition of a run —
+  universe/assets, data source, `risk_model` name, `mean_model` name (incl.
+  `black_litterman` + its views), `method` name (erc/risk_budget/gmv/msr/efficient_msr/
+  black_litterman/mdp/max_enb/hrp/ensemble/equal_weight/cppi/fund_separation),
+  `budget` spec, `Constraints`, `RebalanceSchedule`, cost model, and seed. Every
+  surface accepts a `StrategySpec`; nothing takes loose kwargs.
+- **`registry.py`** — string→factory maps for risk models, mean models, constructors,
+  and allocators. **Registration convention:** each implementation module exposes its
+  public factories and a `register(registry)` hook; the registry module imports them
+  in one place. Wave 1 agents do NOT edit a shared registry file concurrently — they
+  expose factories with documented names; the integration agent (11) assembles the
+  registry. Unknown names raise `ConfigError` listing valid options.
+- **`compare.py`** — given a `StrategySpec` (or several) and a dataset, run a panel of
+  methods through the backtester and return a `summary_stats` comparison table.
+
+This `StrategySpec`/registry pair is owned by the integration agent (Agent 11) so it
+can see every implementation; Wave 1 agents only need to honor the naming + factory
+convention above.
+
 ## 6. Agent workstreams & execution waves
 
 Parallelism works because Wave 0 publishes the contracts first; everyone else
@@ -327,19 +396,32 @@ builds against interfaces, not each other's internals.
 | 5 | Backtester | `backtest/*` | 0, 2/3/4 (iface) | 2 |
 | 8 | Dynamic allocation | `dynamic/*` (CPPI, allocators, PSP/LHP fund separation) | 0, 0.5, 2 (iface) | 2 |
 | 7 | API + dashboard | `api/*`, `dashboard/*`, `cli/*` | 0 + all | 3 |
+| 11 | Integration + glue + docs | `spec.py`, `registry.py`, `compare.py`, `__init__.py`, `examples/`, integration tests | all | 3 |
 
 **Run order:** Wave 0 ✅ → **Wave 0.5** (core extension, quick) → Wave 1 (agents
-1, 2, 3, 4, 9 in parallel) → Wave 2 (agents 5, 6, 8) → Wave 3 (agent 7). The
+1, 2, 3, 4, 9 in parallel) → Wave 2 (agents 5, 6, 8) → Wave 3 (agents 7, 11). The
 data-research agent (1) runs concurrently; its provider pick is wired into
 `data/providers/` after it reports. Agent 4's `ensemble.py` consumes whatever
 constructors exist (GMV/MSR/ERC and, if present, Agent 9's MDP/max-ENB) and
-degrades gracefully if a method is absent, so 4 and 9 stay parallel.
+degrades gracefully if a method is absent, so 4 and 9 stay parallel. Agent 11
+assembles the registry/spec and the curated public API last, so it sees every
+implementation; Agent 7 may consume the registry if 11 lands first, else wires
+methods directly and is reconciled when 11 completes.
 
 **Universal rules for every agent**
 - Implement only your package(s); do not modify another agent's internals.
 - Honor the `core/` contracts exactly; propose contract changes back, don't fork them.
-- Ship pytest tests (target >90% coverage of your package) and type hints.
-- Code must pass `ruff check`, `ruff format --check`, `mypy`, and `pytest`.
+- Follow §3.1 conventions (return type, annualization, tolerances, determinism, error
+  taxonomy) — these are binding, not suggestions.
+- Expose your public methods as documented factory callables with the names in §5.2 so
+  the registry can pick them up; don't hand-wire a competing dispatch.
+- Ship tests: unit + at least one **property-based** test of your invariants (e.g.
+  weights ≥ 0 and sum to 1, risk contributions sum to vol, `1 ≤ ENB ≤ N`). Target
+  >90% coverage. Where a reference library exists (`riskparityportfolio`, `pyportfolioopt`,
+  `pyrb`), add an **optional, skippable** cross-check test (`pytest.importorskip`) — dev
+  dependency only, never a runtime import.
+- Code must pass `ruff check`, `ruff format --check`, `mypy`, and `pytest`. **Run all
+  gates via `.venv/bin/...`** — the base interpreter lacks numpy/pandas and the deps.
 - The synthetic data source is the offline backbone — your tests must not need network.
 
 ## 7. Acceptance criteria (definition of done, per area)
@@ -356,6 +438,7 @@ degrades gracefully if a method is absent, so 4 and 9 stay parallel.
 - **Dynamic:** CPPI never breaches its floor on monotone-down synthetic paths; cushion/multiplier math matches a hand-worked step; floor and drawdown allocators respect their constraints; the three-fund PSP/LHP/safe allocator keeps the funding ratio above its floor on synthetic paths.
 - **Simulation:** GBM mean/vol of simulated log-returns match the parameterization within sampling error; `terminal_stats` summarizes scenarios correctly.
 - **API/dashboard:** `/construct` and `/backtest` endpoints return valid schemas; method selectable across the full set (ERC/risk-budget, GMV, MSR, Efficient-MSR, Black-Litterman, MDP, max-ENB, HRP, ensemble, equal-weight); dashboard renders weights, risk-contribution bars, ENB/diversification-ratio, equity curve, drawdown, and a summary-stats table comparing the chosen method against a benchmark.
+- **Integration/glue:** a `StrategySpec` round-trips through `construct()`, `backtest()`, and `compare()`; the registry resolves every method name and raises `ConfigError` on an unknown one; the `examples/` golden-path script runs end-to-end offline (synthetic data → construct → backtest → analytics → report) in CI; the curated `riskbudget` public API imports without pulling optional/dev deps.
 
 ## 8. Data-source decision (owned by Agent 1)
 

@@ -57,7 +57,9 @@ PCA factor model reconstructs a low-rank-plus-noise covariance within tolerance;
 expected-return estimators recover a known drift on synthetic data; Black-Litterman
 with no views returns the prior `Π` (and a confident view shifts the posterior toward
 `Q`), posterior is computed via a solve not an inverse; results cross-checked against
-a numpy reference. Use a local fixture / synthetic input.
+a numpy reference. Add an **optional skippable cross-check** (`pytest.importorskip("pypfopt")`)
+of the shrinkage estimators and the Black-Litterman posterior against `pyportfolioopt`.
+Use a local fixture / synthetic input.
 
 ## Out of scope
 Optimization, risk-contribution math (Agent 4). Do not change `core/`.

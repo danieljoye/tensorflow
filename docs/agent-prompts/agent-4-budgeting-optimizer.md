@@ -58,7 +58,15 @@ The heart of the system: turn a covariance + risk budget into weights.
 and `PortfolioConstructor.construct(cov, *, mu, budget, constraints) -> Portfolio`
 (from Agent 0.5) for the unified path that the classical constructors and the
 ERC optimizer both expose, so the backtester can drive any method through one
-interface.
+interface. Expose each method as a documented factory callable named per BUILD_PLAN
+§5.2 (`erc`, `risk_budget`, `gmv`, `msr`, `efficient_msr`, `efficient_frontier`,
+`ensemble`) for the Agent 11 registry.
+
+**Long-only correctness (binding, §3.1):** the log-barrier / CCD risk-budget solver
+requires `w > 0`, so the risk-budget path is **inherently long-only**. If
+`constraints` would permit shorting (negative weights), the risk-budget `Optimizer`
+must raise `OptimizationError` — do NOT silently return a long-only result. Shorting
+is allowed only on the classical (GMV/MSR/EF) and ensemble paths.
 
 ## Deliverables
 Both solvers + contribution math + constraints + classical benchmarks + conditional
@@ -68,8 +76,11 @@ budgets are matched; constraints respected (e.g. turnover cap reduces trade size
 GMV beats random portfolios on variance; MSR matches the analytic tangency on a toy
 2-asset case; the efficient frontier is monotone/convex; the ensemble weights equal
 the mean of constituents and the TE overlay lowers ex-ante tracking error; conditional
-budgets reduce to ERC on a flat signal. Use fixed synthetic cov + μ fixtures. Cite the
-source paper (BUILD_PLAN §11) in each non-trivial module docstring.
+budgets reduce to ERC on a flat signal; the risk-budget path raises `OptimizationError`
+when asked to short. Use fixed synthetic cov + μ fixtures. Add an **optional skippable
+cross-check** (`pytest.importorskip("riskparityportfolio")` / `pyrb`) asserting your
+CCD ERC weights match the reference library on the same Σ. Cite the source (BUILD_PLAN
+§11/§12) in each non-trivial module docstring.
 
 ## Out of scope
 Covariance estimation (Agent 3), backtesting (Agent 5). Do not change `core/`.

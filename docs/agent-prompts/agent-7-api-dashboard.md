@@ -28,7 +28,11 @@ Expose the whole pipeline to humans and services.
 
 ## Interfaces to honor
 Only the public `core` types and each package's public entry points — do not reach
-into other packages' internals.
+into other packages' internals. Prefer driving runs via `StrategySpec` + the
+`registry` (BUILD_PLAN §5.2, owned by Agent 11): accept/return a `StrategySpec` and
+resolve `method`/`risk_model`/`mean_model` names through the registry rather than a
+bespoke dispatch. If Agent 11 hasn't landed yet, wire methods directly behind a thin
+adapter and reconcile to the registry when it does (coordinate, don't duplicate).
 
 ## Deliverables
 API + dashboard + CLI, with tests: FastAPI `TestClient` checks `/construct` and
