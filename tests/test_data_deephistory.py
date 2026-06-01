@@ -9,8 +9,10 @@ fixtures exercise the same derivation/alignment path that runs live.
 
 from __future__ import annotations
 
+import importlib.util
 from datetime import date
 from pathlib import Path
+from types import ModuleType
 
 import numpy as np
 import pandas as pd
@@ -305,8 +307,20 @@ def test_registry_exposes_deep_history_sources() -> None:
 # ---------------------------------------------------------------------------
 
 
+def _load_example() -> ModuleType:
+    """Load examples/real_data_demo.py by file path (``examples`` is not a
+    package on sys.path under pytest)."""
+    path = Path(__file__).resolve().parents[1] / "examples" / "real_data_demo.py"
+    spec = importlib.util.spec_from_file_location("real_data_demo", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_example_builds_panel_and_runs_erc_offline() -> None:
-    from examples.real_data_demo import build_panel, make_spec
+    example = _load_example()
+    build_panel, make_spec = example.build_panel, example.make_spec
 
     panel = build_panel(live=False)
     assert isinstance(panel, PriceData)
@@ -321,8 +335,10 @@ def test_example_builds_panel_and_runs_erc_offline() -> None:
 
 
 def test_example_report_builds_offline(tmp_path: Path) -> None:
-    from examples.real_data_demo import build_panel, make_spec
     from riskbudget.reporting import build_report
+
+    example = _load_example()
+    build_panel, make_spec = example.build_panel, example.make_spec
 
     panel = build_panel(live=False)
     result = rb.backtest(make_spec("ERC", "erc"), prices=panel)
