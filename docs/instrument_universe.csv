@@ -1,0 +1,104 @@
+asset_class,symbol,description,instrument_type,native_start,max_history_start,history_source,splice_chain,live_source,confidence,notes
+equity,SP500_UNIVERSE,Broad US large-cap universe (S&P 500 PIT membership),universe,1996-01-02,1957-03-04,fja05680/sp500 (GitHub),S&P500 PIT membership 1996 -> index pre-1996,Tiingo/Norgate/Sharadar,M,Use point-in-time membership; retain delisted names
+equity,RUSSELL1000_UNIVERSE,Broad US large/mid-cap universe (Russell 1000),universe,1984,1978-12-31,FTSE Russell (licensed),Russell 1000 membership,Norgate/licensed,M,No reliable free PIT membership
+equity,DEEP_STOCK_DAILY,Single-stock daily price history,reference,1962-07-02,1926,CRSP (WRDS),CRSP daily 1962 / Pre62 1926 / monthly 1925,Tiingo(1962)/Norgate(1950),H,Free feeds bottom out ~1962-07-02
+equity_index_future,ES,E-mini S&P 500 future,future,1997-09-09,1957-03-04,Norgate/CSI,S&P500 cash 1957 -> SP 1982 -> ES 1997,Norgate/CSI/IB,H,Splice to price index ^GSPC
+equity_index_future,SP,Full-size S&P 500 future,future,1982-04-21,1957-03-04,Norgate/CSI,S&P500 cash 1957 -> SP 1982,Norgate/CSI,H,Superseded by ES
+equity_index_future,NQ,E-mini Nasdaq-100 future,future,1999-06-21,1985-01-31,Norgate/CSI,NDX cash 1985 -> ND 1996 -> NQ 1999,Norgate/CSI,H,
+equity_index_future,YM,E-mini Dow future,future,2002-04,1896-05-26,Norgate/CSI,DJIA cash 1896 -> YM 2002,Norgate/CSI,M,Mostly cash history
+equity_index_future,RTY,E-mini Russell 2000 future,future,2017-07-10,1987,Norgate/CSI,RUT cash 1987 -> CME 1993 -> ICE 2008 -> CME 2017,Norgate/CSI,H,Cross-exchange seams
+equity_index_future,EMD,E-mini S&P MidCap 400 future,future,2002,1991-06,Norgate/CSI,S&P400 cash 1991 -> MD 1992 -> EMD ~2002,Norgate/CSI,L,Exact EMD launch unverified
+equity_index_future,MES,Micro E-mini S&P 500,future,2019-05-06,1957-03-04,Norgate/CSI,splice onto ES,Norgate/CSI/IB,H,
+equity_index_future,MNQ,Micro E-mini Nasdaq-100,future,2019-05-06,1985-01-31,Norgate/CSI,splice onto NQ,Norgate/CSI/IB,H,
+equity_index_future,M2K,Micro E-mini Russell 2000,future,2019-05-06,1987,Norgate/CSI,splice onto RTY,Norgate/CSI/IB,H,
+equity_index_future,MYM,Micro E-mini Dow,future,2019-05-06,1896-05-26,Norgate/CSI,splice onto YM,Norgate/CSI/IB,H,
+etf,SPY,SPDR S&P 500 Trust,etf,1993-01-22,1988,Tiingo/yfinance,S&P500 TR 1988 -> SPY 1993,Tiingo/Stooq,H,First US ETF
+etf,IVV,iShares Core S&P 500,etf,2000-05-15,1988,Tiingo/yfinance,S&P500 TR -> IVV 2000,Tiingo,H,
+etf,VOO,Vanguard S&P 500,etf,2010-09-07,1976,Tiingo/yfinance,VFINX 1976 -> VOO 2010,Tiingo,H,
+etf,QQQ,Invesco QQQ Trust,etf,1999-03-10,1985-01-31,Tiingo/yfinance,NDX/XNDX 1985 -> QQQ 1999,Tiingo,H,Was QQQQ 2004-2011
+etf,IWM,iShares Russell 2000,etf,2000-05-22,1978-12-31,Tiingo/yfinance,Russell 2000 TR -> IWM 2000,Tiingo,H,
+etf,DIA,SPDR Dow Jones Industrial,etf,1998-01-14,1896,Tiingo/yfinance,DJITR -> DIA 1998,Tiingo,H,
+etf,VTI,Vanguard Total Stock Market,etf,2001-05-24,1992,Tiingo/yfinance,VTSMX 1992 -> VTI 2001,Tiingo,H,
+etf,MDY,SPDR S&P MidCap 400,etf,1995-05-04,1991-06,Tiingo/yfinance,S&P400 -> MDY 1995,Tiingo,H,
+etf,IWB,iShares Russell 1000,etf,2000-05-15,1978-12-31,Tiingo/yfinance,Russell 1000 TR -> IWB,Tiingo,H,
+etf,IWD,iShares Russell 1000 Value,etf,2000-05-22,1987,Tiingo/yfinance,Russell 1000 Value -> IWD,Tiingo,H,
+etf,IWF,iShares Russell 1000 Growth,etf,2000-05-22,1987,Tiingo/yfinance,Russell 1000 Growth -> IWF,Tiingo,H,
+etf,XLK,Technology Select Sector SPDR,etf,1998-12-16,1998-06-30,Tiingo/yfinance,Tech Select Sector TR -> XLK,Tiingo,H,
+etf,XLF,Financial Select Sector SPDR,etf,1998-12-16,1998-06-30,Tiingo/yfinance,Financial Select Sector TR -> XLF,Tiingo,H,Lost RE to XLRE 2015
+etf,XLE,Energy Select Sector SPDR,etf,1998-12-16,1998-06-30,Tiingo/yfinance,Energy Select Sector TR -> XLE,Tiingo,H,
+etf,XLV,Health Care Select Sector SPDR,etf,1998-12-16,1998-06-30,Tiingo/yfinance,Health Care Select Sector TR -> XLV,Tiingo,H,
+etf,XLI,Industrial Select Sector SPDR,etf,1998-12-16,1998-06-30,Tiingo/yfinance,Industrial Select Sector TR -> XLI,Tiingo,H,
+etf,XLY,Consumer Discretionary Select SPDR,etf,1998-12-16,1998-06-30,Tiingo/yfinance,Cons Disc Select Sector TR -> XLY,Tiingo,H,Lost names to XLC 2018
+etf,XLP,Consumer Staples Select SPDR,etf,1998-12-16,1998-06-30,Tiingo/yfinance,Cons Staples Select Sector TR -> XLP,Tiingo,H,
+etf,XLU,Utilities Select Sector SPDR,etf,1998-12-16,1998-06-30,Tiingo/yfinance,Utilities Select Sector TR -> XLU,Tiingo,H,
+etf,XLB,Materials Select Sector SPDR,etf,1998-12-16,1998-06-30,Tiingo/yfinance,Materials Select Sector TR -> XLB,Tiingo,H,
+etf,XLRE,Real Estate Select Sector SPDR,etf,2015-10-07,2015-10-07,Tiingo/yfinance,RE Select Sector index back-history only,Tiingo,H,No pre-2015 ETF price
+etf,XLC,Communication Svcs Select SPDR,etf,2018-06-18,2018-06-18,Tiingo/yfinance,Comm Svcs Select Sector index only,Tiingo,H,No pre-2018 ETF price
+etf,SHY,iShares 1-3yr Treasury,etf,2002-07-22,1992,Tiingo/yfinance,ICE 1-3y Tsy TR -> SHY,Tiingo,H,
+etf,IEF,iShares 7-10yr Treasury,etf,2002-07-22,1992,Tiingo/yfinance,ICE 7-10y Tsy TR -> IEF,Tiingo,H,
+etf,TLT,iShares 20+yr Treasury,etf,2002-07-22,1973,Tiingo/yfinance,Bloomberg Long Tsy TR 1973 -> TLT,Tiingo,H,
+etf,GOVT,iShares US Treasury Bond,etf,2012-02-14,1973,Tiingo/yfinance,Bloomberg US Tsy TR 1973 -> GOVT,Tiingo,H,
+etf,BIL,SPDR 1-3mo T-Bill,etf,2007-05-25,1950s,Tiingo/yfinance,Bloomberg 1-3mo T-Bill -> BIL,Tiingo,H,
+etf,SHV,iShares Short Treasury,etf,2007-01-05,1950s,Tiingo/yfinance,ICE Short Tsy -> SHV,Tiingo,M,Verify exact inception
+etf,AGG,iShares Core US Aggregate Bond,etf,2003-09-22,1976-01,Tiingo/yfinance,Bloomberg US Agg TR 1976 -> AGG,Tiingo,H,
+etf,BND,Vanguard Total Bond Market,etf,2007-04-03,1986,Tiingo/yfinance,VBMFX 1986 / Agg 1976 -> BND,Tiingo,H,
+etf,LQD,iShares iBoxx IG Corp,etf,2002-07-22,1973,Tiingo/yfinance,Bloomberg US Corp IG TR 1973 -> LQD,Tiingo,H,
+etf,HYG,iShares iBoxx HY Corp,etf,2007-04-04,1983,Tiingo/yfinance,Bloomberg US HY TR 1983 -> HYG,Tiingo,H,
+etf,JNK,SPDR Bloomberg High Yield,etf,2007-11-28,1983,Tiingo/yfinance,Bloomberg US HY TR 1983 -> JNK,Tiingo,H,
+etf,TIP,iShares TIPS Bond,etf,2003-12-04,1997,Tiingo/yfinance,Bloomberg US TIPS ~1997 -> TIP,Tiingo,H,
+etf,MBB,iShares MBS,etf,2007-03-13,1976,Tiingo/yfinance,Bloomberg US MBS 1976 -> MBB,Tiingo,M,Verify exact inception
+etf,GLD,SPDR Gold Shares,etf,2004-11-18,1968,Tiingo/yfinance,LBMA Gold PM fix 1968 (spot) -> GLD,Tiingo,H,Physical; splice to spot
+etf,IAU,iShares Gold Trust,etf,2005-01-21,1968,Tiingo/yfinance,LBMA Gold fix 1968 -> IAU,Tiingo,H,
+etf,SLV,iShares Silver Trust,etf,2006-04-21,1968,Tiingo/yfinance,LBMA Silver 1968 -> SLV,Tiingo,H,
+etf,USO,United States Oil Fund,etf,2006-04-10,1983-03,Tiingo/yfinance,WTI front-month roll (CL 1983) NOT spot -> USO,Tiingo,H,Futures-backed
+etf,UNG,United States Natural Gas Fund,etf,2007-04-18,1990-04,Tiingo/yfinance,Henry Hub roll (NG 1990) NOT spot -> UNG,Tiingo,H,Futures-backed; contango drag
+etf,DBC,Invesco DB Commodity Index,etf,2006-02-03,1989,Tiingo/yfinance,DBIQ Optimum Yield ER ~1989 -> DBC,Tiingo,H,Futures-backed
+etf,GSG,iShares S&P GSCI Commodity,etf,2006-07-10,1970,Tiingo/yfinance,S&P GSCI TR back-cast 1970 -> GSG,Tiingo,H,Futures-backed
+etf,DBA,Invesco DB Agriculture,etf,2007-01-05,1989,Tiingo/yfinance,DBIQ Ag ER ~1989 -> DBA,Tiingo,H,Futures-backed
+etf,EFA,iShares MSCI EAFE,etf,2001-08-14,1969-12-31,Tiingo/yfinance,MSCI EAFE NR 1969 -> EFA,Tiingo,H,International (optional)
+etf,EEM,iShares MSCI Emerging Markets,etf,2003-04-07,1987-12-31,Tiingo/yfinance,MSCI EM 1987 -> EEM,Tiingo,H,International (optional)
+treasury_future,ZB,30Y T-Bond future,future,1977-08-22,1977-08-22,Norgate/CSI,ZB 1977 (splice ZB->UB for long end),Norgate/CSI,H,Deliverable basket drifted
+treasury_future,UB,Ultra T-Bond future,future,2010-01,1977-08-22,Norgate/CSI,ZB 1977 -> UB 2010,Norgate/CSI,H,
+treasury_future,ZN,10Y T-Note future,future,1982,1982,Norgate/CSI,ZN 1982,Norgate/CSI,H,
+treasury_future,ZF,5Y T-Note future,future,1988,1988,Norgate/CSI,ZF 1988,Norgate/CSI,M,
+treasury_future,ZT,2Y T-Note future,future,1990,1990,Norgate/CSI,ZT 1990,Norgate/CSI,H,
+treasury_future,TN,Ultra 10Y T-Note future,future,2016-01,2016-01,Norgate/CSI,TN 2016,Norgate/CSI,H,
+treasury_future,GE,Eurodollar 3M future,future,1981-12,1981-12,Norgate/CSI,GE 1981 -> SOFR 2023,Norgate/CSI,H,Converted to SOFR 2023
+treasury_future,SR3,3M SOFR future,future,2018-05-07,1981-12,Norgate/CSI,splice GE -> SR3,Norgate/CSI,H,
+treasury_future,ZQ,30-Day Fed Funds future,future,1988-10,1988-10,Norgate/CSI,ZQ 1988,Norgate/CSI,L,Verify exact inception
+rate_series,DGS10,10Y constant-maturity Treasury yield,yield,1962-01-02,1871,FRED,Shiller 1871 -> GS10 1953 -> DGS10 1962,FRED,H,Yield not return
+rate_series,GS10,10Y CMT yield monthly,yield,1953-04,1871,FRED,Shiller long rate 1871 -> GS10 1953,FRED,H,
+rate_series,TB3MS,3M T-bill rate,yield,1934-01,1934-01,FRED,TB3MS 1934,FRED,H,Deepest short rate
+rate_series,DGS30,30Y CMT yield,yield,1977-02,1977-02,FRED,DGS30 (gap 2002-2006),FRED,M,Handle gap explicitly
+bond_total_return,US10Y_TR,10Y T-bond total return annual,total_return,1928,1928,Damodaran (NYU Stern),Damodaran histretSP 1928,Damodaran,H,Annual
+bond_total_return,USAGG_TR,Bloomberg US Aggregate Bond TR,total_return,1976-01,1976-01,Bloomberg,Bloomberg US Agg 1976,Bloomberg,H,
+bond_total_return,LTGOVT_TR,Ibbotson long-term govt bond TR,total_return,1926,1926,Ibbotson/SBBI (Morningstar),SBBI 1926 (pre-1977 modeled),Morningstar,H,
+commodity_future,CL,WTI crude oil future,future,1983-03-30,1946,Norgate/CSI,Macrotrends annual WTI 1946 -> CL 1983,Norgate/CSI,H,
+commodity_future,BZ,Brent crude future,future,1988-06,1988-06,Norgate/CSI,BZ/IPE 1988,Norgate/CSI,H,
+commodity_future,NG,Henry Hub natural gas future,future,1990-04,1990-04,Norgate/CSI,NG 1990,Norgate/CSI,H,
+commodity_future,HO,Heating oil/ULSD future,future,1978,1978,Norgate/CSI,HO 1978,Norgate/CSI,M,Exact month uncertain
+commodity_future,RB,RBOB gasoline future,future,2005-10,1984,Norgate/CSI,HU 1984 -> RB 2005,Norgate/CSI,H,
+commodity_future,GC,Gold future,future,1974-12-31,1833,Norgate/CSI,NMA annual 1833 / LBMA 1968 -> GC 1974,Norgate/CSI,H,
+commodity_future,SI,Silver future,future,1963-06,1963-06,Norgate/CSI,COMEX silver 1963,Norgate/CSI,M,1933 context only
+commodity_future,HG,Copper future,future,1959,1959,Norgate/CSI,COMEX copper 1959,Norgate/CSI,M,
+commodity_future,PL,Platinum future,future,1956,1956,Norgate/CSI,NYMEX platinum 1956,Norgate/CSI,L,Verify inception
+commodity_future,PA,Palladium future,future,1968,1968,Norgate/CSI,NYMEX palladium 1968,Norgate/CSI,L,Verify inception
+commodity_future,ZC,Corn future,future,1877,1959,CSI/Pinnacle,CBOT corn pit 1877 / continuous ~1959,CSI/Norgate,M,Continuous starts later than pit
+commodity_future,ZS,Soybeans future,future,1936-10,1969,CSI/Pinnacle,CBOT soybeans 1936 / continuous ~1969,CSI/Norgate,H,
+commodity_future,ZW,Wheat (SRW) future,future,1877,1959,CSI/Pinnacle,CBOT wheat pit 1877 / continuous ~1959,CSI/Norgate,M,
+commodity_future,SB,Sugar No.11 future,future,1960s,1960s,CSI/Pinnacle,Sugar11 world continuous ~1960s,CSI/Norgate,M,
+commodity_future,KC,Coffee C future,future,1972,1972,CSI/Pinnacle,Coffee-C continuous ~1972,CSI/Norgate,M,
+commodity_future,CC,Cocoa future,future,1925,1959,CSI/Pinnacle,NY Cocoa 1925 / continuous ~1959,CSI/Norgate,M,
+commodity_future,CT,Cotton No.2 future,future,1870,1959,CSI/Pinnacle,NY Cotton 1870 / continuous ~1959,CSI/Norgate,M,
+commodity_future,LE,Live cattle future,future,1964,1964,CSI/Pinnacle,CME live cattle 1964,CSI/Norgate,H,
+commodity_future,HE,Lean hogs future,future,1996,1966,CSI/Pinnacle,Live hog 1966 -> lean hog 1996,CSI/Norgate,H,
+commodity_index,GSCI,S&P GSCI commodity index,index,1991,1970,S&P DJI,GSCI back-tested 1970 (hypothetical pre-1991),S&P DJI,H,
+commodity_index,BCOM,Bloomberg Commodity Index,index,1991,1960,Bloomberg,BCOM back-calc 1960 (hypothetical pre-1991),Bloomberg,H,
+commodity_index,CRB,Refinitiv/CoreCommodity CRB Index,index,1957,1947,LSEG/CoreCommodity,CRB live 1957 (base 1947-49),LSEG,H,Oldest live broad index
+commodity_spot,GOLD_SPOT,Gold spot price,spot,1968,1833,NMA/LBMA,NMA annual 1833 / LBMA PM fix 1968,WGC Goldhub,H,
+commodity_spot,WTI_SPOT,WTI crude spot,spot,1986,1946,EIA/Macrotrends,Macrotrends annual 1946 / EIA daily 1986,EIA,H,
+equity_index,SP500,S&P 500 index,index,1957-03-04,1871,Shiller/S&P DJI,Shiller composite 1871 -> S&P500 1957,FRED/yfinance,H,TR daily from 1988
+equity_index,NDX,Nasdaq-100 index,index,1985-01-31,1985-01-31,Nasdaq,NDX 1985,yfinance,H,
+equity_index,RUT,Russell 2000 index,index,1987,1987,FTSE Russell,RUT 1987 (base 1978-12),yfinance,H,
+equity_index,DJI,Dow Jones Industrial Average,index,1896-05-26,1896-05-26,S&P DJI,DJIA 1896,yfinance,H,Price only
+equity_index,MKT_TR_DAILY,US market total return daily (factor),index,1926-07-01,1926-07-01,Ken French Data Library,Ken French market TR 1926,Dartmouth,H,Free deepest daily equity TR
