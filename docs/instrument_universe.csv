@@ -1,21 +1,136 @@
 asset_class,symbol,description,instrument_type,native_start,max_history_start,history_source,splice_chain,live_source,confidence,notes
-equity,SP500_UNIVERSE,Broad US large-cap universe (S&P 500 PIT membership),universe,1996-01-02,1957-03-04,fja05680/sp500 (GitHub),S&P500 PIT membership 1996 -> index pre-1996,Tiingo/Norgate/Sharadar,M,Use point-in-time membership; retain delisted names
-equity,RUSSELL1000_UNIVERSE,Broad US large/mid-cap universe (Russell 1000),universe,1984,1978-12-31,FTSE Russell (licensed),Russell 1000 membership,Norgate/licensed,M,No reliable free PIT membership
-equity,DEEP_STOCK_DAILY,Single-stock daily price history,reference,1962-07-02,1926,CRSP (WRDS),CRSP daily 1962 / Pre62 1926 / monthly 1925,Tiingo(1962)/Norgate(1950),H,Free feeds bottom out ~1962-07-02
-equity_index_future,ES,E-mini S&P 500 future,future,1997-09-09,1957-03-04,Norgate/CSI,S&P500 cash 1957 -> SP 1982 -> ES 1997,Norgate/CSI/IB,H,Splice to price index ^GSPC
-equity_index_future,SP,Full-size S&P 500 future,future,1982-04-21,1957-03-04,Norgate/CSI,S&P500 cash 1957 -> SP 1982,Norgate/CSI,H,Superseded by ES
-equity_index_future,NQ,E-mini Nasdaq-100 future,future,1999-06-21,1985-01-31,Norgate/CSI,NDX cash 1985 -> ND 1996 -> NQ 1999,Norgate/CSI,H,
-equity_index_future,YM,E-mini Dow future,future,2002-04,1896-05-26,Norgate/CSI,DJIA cash 1896 -> YM 2002,Norgate/CSI,M,Mostly cash history
-equity_index_future,RTY,E-mini Russell 2000 future,future,2017-07-10,1987,Norgate/CSI,RUT cash 1987 -> CME 1993 -> ICE 2008 -> CME 2017,Norgate/CSI,H,Cross-exchange seams
-equity_index_future,EMD,E-mini S&P MidCap 400 future,future,2002,1991-06,Norgate/CSI,S&P400 cash 1991 -> MD 1992 -> EMD ~2002,Norgate/CSI,L,Exact EMD launch unverified
-equity_index_future,MES,Micro E-mini S&P 500,future,2019-05-06,1957-03-04,Norgate/CSI,splice onto ES,Norgate/CSI/IB,H,
-equity_index_future,MNQ,Micro E-mini Nasdaq-100,future,2019-05-06,1985-01-31,Norgate/CSI,splice onto NQ,Norgate/CSI/IB,H,
-equity_index_future,M2K,Micro E-mini Russell 2000,future,2019-05-06,1987,Norgate/CSI,splice onto RTY,Norgate/CSI/IB,H,
-equity_index_future,MYM,Micro E-mini Dow,future,2019-05-06,1896-05-26,Norgate/CSI,splice onto YM,Norgate/CSI/IB,H,
+equity_universe,DOW30,Dow Jones Industrial Average 30,universe,1896-05-26,1896-05-26,Wikipedia/S&P DJI,DJIA membership 1896,Norgate/S&P DJI,H,Committee-driven ad hoc changes
+equity_universe,SP100,S&P 100 (OEX),universe,1983,2000,Wikipedia (current),subset of S&P 500,Norgate/S&P DJI,M,Quarterly; no clean free PIT
+equity_universe,SP500,S&P 500,universe,1957-03-04,1996,fja05680/sp500 (GitHub),PIT membership 1996+ (free); 1998 Sharadar,Norgate/Sharadar,H,Quarterly + ad hoc; free PIT reliable ~2000+
+equity_universe,SP400,S&P MidCap 400,universe,1991-06,2000,Wikipedia (current),weak free PIT,Norgate/Sharadar,M,Quarterly
+equity_universe,SP600,S&P SmallCap 600,universe,1994-01,2000,Wikipedia (current),weak free PIT,Norgate/Sharadar,M,Quarterly
+equity_universe,NDX100,Nasdaq-100,universe,1985-01-31,2000,Wikipedia (Nasdaq-100 changes),Annual Dec recon,Norgate/Nasdaq,H,100 non-financial
+equity_universe,R1000,Russell 1000,universe,1984,1984,FTSE Russell (licensed),annual June recon (semi-annual 2026+),Norgate/FTSE,H,No reliable free PIT
+equity_universe,R2000,Russell 2000,universe,1984,1984,FTSE Russell (licensed),annual June recon,Norgate/FTSE,H,Small-cap benchmark
+equity_universe,R3000,Russell 3000,universe,1984,1984,FTSE Russell (licensed),annual June recon,Norgate/FTSE,H,~97% investable US equity
+equity,GE,General Electric (GE Aerospace),equity,1892,1925-12,CRSP (WRDS); free 1962,CRSP daily 1925 / free 1962,Tiingo/Norgate,H,Original DJIA name
+equity,IBM,International Business Machines,equity,1915,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,H,
+equity,KO,Coca-Cola,equity,1919,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,H,
+equity,PG,Procter & Gamble,equity,1891,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,H,
+equity,XOM,Exxon Mobil,equity,1920s,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,H,Ex-Standard Oil NJ
+equity,CVX,Chevron,equity,1920s,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,H,Ex-Standard Oil Calif
+equity,JNJ,Johnson & Johnson,equity,1944-09,1944,CRSP; free 1962,CRSP 1944 / free 1962,Tiingo/Norgate,H,
+equity,MMM,3M,equity,1946,1946,CRSP; free 1962,CRSP 1946 / free 1962,Tiingo/Norgate,M,
+equity,MRK,Merck & Co,equity,1941,1946,CRSP; free 1962,CRSP ~1946 / free 1962,Tiingo/Norgate,M,
+equity,PFE,Pfizer,equity,1942,1944,CRSP; free 1962-1972,CRSP 1944 / free 1962-72,Tiingo/Norgate,M,
+equity,PEP,PepsiCo,equity,1919,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,M,Pepsi/Loft lineage
+equity,CAT,Caterpillar,equity,1929,1929,CRSP; free 1962,CRSP 1929 / free 1962,Tiingo/Norgate,H,
+equity,DIS,Walt Disney,equity,1957-11,1957,CRSP; free 1962,CRSP 1957 / free 1962,Tiingo/Norgate,H,
+equity,BA,Boeing,equity,1934,1934,CRSP; free 1962,CRSP 1934 / free 1962,Tiingo/Norgate,H,
+equity,F,Ford Motor,equity,1956-01,1956,CRSP; free 1962-1972,CRSP 1956 / free 1972,Tiingo/Norgate,M,
+equity,GM,General Motors,equity,2010-11-18,2010-11-18,CRSP; free 2010,new GM IPO 2010 (old GM delisted 2009),Tiingo/Norgate,H,Entity discontinuity
+equity,T,AT&T,equity,1984,1925-12,CRSP; free 1962,old AT&T CRSP 1925; current=SBC lineage 1984,Tiingo/Norgate,M,Ticker continuity != entity
+equity,MO,Altria,equity,1920s,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,H,Ex-Philip Morris
+equity,JPM,JPMorgan Chase,equity,1969,1969,CRSP; free 1980,CRSP 1969 / free ~1980,Tiingo/Norgate,M,Modern lineage
+equity,WMT,Walmart,equity,1972-08,1970,CRSP; free 1972,CRSP 1970 / free 1972,Tiingo/Norgate,H,
+equity,MCD,McDonalds,equity,1965-04,1965,CRSP; free 1966,CRSP 1965 / free 1966,Tiingo/Norgate,H,
+equity,HD,Home Depot,equity,1981-09,1981,CRSP; free 1981,IPO 1981,Tiingo/Norgate,H,
+equity,INTC,Intel,equity,1971-10,1972,CRSP; free 1980,CRSP Nasdaq 1972 / free ~1980,Tiingo/Norgate,M,
+equity,AXP,American Express,equity,1977,1972,CRSP; free 1972,CRSP 1972 / free 1972,Tiingo/Norgate,M,
+equity,GD,General Dynamics,equity,1925,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,M,Electric Boat lineage
+equity,HON,Honeywell,equity,1925,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,M,Allied Chemical lineage
+equity,HPQ,HP Inc,equity,1961,1961,CRSP; free 1962,CRSP 1961 / free 1962,Tiingo/Norgate,M,
+equity,GIS,General Mills,equity,1928,1928,CRSP; free 1962,CRSP 1928 / free 1962,Tiingo/Norgate,M,
+equity_index_future,ES,E-mini S&P 500,future,1997-09-09,1957-03-04,Norgate/CSI,S&P500 cash 1957 (comp 1928) -> SP 1982 -> ES 1997,Norgate/CSI/IB,H,Top-tier; splice to price index
+equity_index_future,SP,S&P 500 full-size (legacy),future,1982-04-21,1957-03-04,Norgate/CSI,S&P500 cash 1957 -> SP 1982,Norgate/CSI,H,Delisted 2021-09-17 (->ES)
+equity_index_future,MES,Micro E-mini S&P 500,future,2019-05-06,1957-03-04,Norgate/CSI,splice onto ES,Norgate/CSI/IB,H,Top-tier
+equity_index_future,NQ,E-mini Nasdaq-100,future,1999-06-21,1985-01-31,Norgate/CSI,NDX cash 1985 -> ND 1996 -> NQ 1999,Norgate/CSI/IB,H,Top-tier
+equity_index_future,ND,Nasdaq-100 full-size (legacy),future,1996-04-10,1985-01-31,Norgate/CSI,NDX cash 1985 -> ND 1996,Norgate/CSI,M,Superseded by NQ
+equity_index_future,MNQ,Micro E-mini Nasdaq-100,future,2019-05-06,1985-01-31,Norgate/CSI,splice onto NQ,Norgate/CSI/IB,H,Top-tier
+equity_index_future,YM,E-mini Dow,future,2002-04-05,1896-05-26,Norgate/CSI,DJIA cash 1896 -> YM 2002,Norgate/CSI/IB,H,Top-tier; mostly cash history
+equity_index_future,MYM,Micro E-mini Dow,future,2019-05-06,1896-05-26,Norgate/CSI,splice onto YM,Norgate/CSI/IB,H,Top-tier
+equity_index_future,RTY,E-mini Russell 2000,future,2017-07-10,1987-09-10,Norgate/CSI,RUT cash 1987 -> CME 1993 -> ICE/TF 2007 -> CME 2017,Norgate/CSI/IB,H,Top-tier; cross-venue seams
+equity_index_future,M2K,Micro E-mini Russell 2000,future,2019-05-06,1987-09-10,Norgate/CSI,splice onto RTY,Norgate/CSI/IB,H,Top-tier
+equity_index_future,EMD,E-mini S&P MidCap 400,future,2002-01,1991-06-19,Norgate/CSI,S&P400 cash 1991 -> MD 1992 -> EMD 2002,Norgate/CSI,M,Secondary; thin
+equity_index_future,SMC,E-mini S&P SmallCap 600,future,2000s,1994-01-03,Norgate/CSI,S&P600 cash 1994 (futures barely trade),Norgate/CSI,M,Illiquid; use cash index
+equity_index_future,NKD,Nikkei 225 (USD),future,1990-09-25,1950-09-07,Norgate/CSI,Nikkei 225 cash 1950 -> NKD 1990,Norgate/CSI,M,Secondary; US-listed intl
+vol_future,VX,Cboe VIX futures,future,2004-03-26,1990-01-02,Norgate/CSI,VIX index 1990 (VXO 1986) context -> VX 2004,Norgate/CSI/Cboe,H,Top-tier; clean from ~2007; do NOT splice spot->futures
+vol_future,VXM,Mini VIX futures,future,2020-08-10,2004-03-26,Norgate/CSI,splice onto VX,Norgate/CSI,H,Secondary
+fx_future,6E,Euro FX (EUR/USD),future,1999-01-04,1972-05-16,Norgate/CSI,DEM (6D) IMM 1972 @1.95583 -> 6E 1999,Norgate/CSI/IB,H,Top-tier; splice via Deutsche Mark not ECU
+fx_future,6J,Japanese Yen,future,1972-05-16,1972-05-16,Norgate/CSI,native (original IMM seven),Norgate/CSI/IB,H,Top-tier
+fx_future,6B,British Pound,future,1972-05-16,1972-05-16,Norgate/CSI,native (original IMM seven),Norgate/CSI/IB,H,Top-tier
+fx_future,6C,Canadian Dollar,future,1972-05-16,1972-05-16,Norgate/CSI,native (original IMM seven),Norgate/CSI/IB,H,Liquid secondary
+fx_future,6S,Swiss Franc,future,1972-05-16,1972-05-16,Norgate/CSI,native (original IMM seven),Norgate/CSI/IB,H,Liquid secondary
+fx_future,6A,Australian Dollar,future,1987-01,1987-01,Norgate/CSI,native (added 1987),Norgate/CSI/IB,M,Liquid secondary
+fx_future,6N,New Zealand Dollar,future,2004,2004,Norgate/CSI,native (relaunch 2004),Norgate/CSI,M,Secondary
+fx_future,6M,Mexican Peso,future,1995-05,1995-05,Norgate/CSI,modern 6M 1995 (1972 line lapsed; no splice),Norgate/CSI,H,Do not splice across gap
+fx_future,DX,US Dollar Index,future,1985-11-20,1973-03,Norgate/CSI/ICE,USDX index 1973 (base 100) -> DX futures 1985,Norgate/CSI/ICE,H,ICE (ex-NYCE/FINEX)
+fx_future,M6E,Micro/E-micro Euro,future,2009-03-22,1972-05-16,Norgate/CSI,1/10 of 6E (splice onto 6E),Norgate/CSI/IB,H,FX micros are 2009 not 2019
+fx_future,M6A,Micro/E-micro AUD,future,2009-03-22,1987-01,Norgate/CSI,1/10 of 6A,Norgate/CSI,M,
+fx_future,M6B,Micro/E-micro GBP,future,2009-03-22,1972-05-16,Norgate/CSI,1/10 of 6B,Norgate/CSI,M,
+treasury_future,ZB,30Y T-Bond,future,1977-08,1977-08,Norgate/CSI,ZB 1977 (splice ZB->UB for long end),Norgate/CSI/IB,H,Top-tier; deliverable basket drifted
+treasury_future,UB,Ultra T-Bond,future,2010-01,1977-08,Norgate/CSI,ZB 1977 -> UB 2010 (back-adjust),Norgate/CSI/IB,H,True long-end after 2010
+treasury_future,ZN,10Y T-Note,future,1982-05,1982-05,Norgate/CSI,ZN 1982,Norgate/CSI/IB,H,Top-tier
+treasury_future,TN,Ultra 10Y T-Note,future,2016-01,2016-01,Norgate/CSI,TN 2016 (keep separate from ZN),Norgate/CSI/IB,H,Liquid secondary
+treasury_future,ZF,5Y T-Note,future,1988,1988,Norgate/CSI,ZF 1988,Norgate/CSI/IB,H,Top-tier
+treasury_future,ZT,2Y T-Note,future,1990,1990,Norgate/CSI,ZT 1990,Norgate/CSI/IB,H,Top-tier
+treasury_future,ZQ,30-Day Fed Funds,future,1988-10,1988-10,Norgate/CSI,ZQ 1988,Norgate/CSI/IB,H,Top-tier front-end (FedWatch)
+treasury_future,SR3,3M SOFR,future,2018-05-07,1981-12,Norgate/CSI,GE/Eurodollar 1981 -> SR3 2018 (+26.161bp fallback),Norgate/CSI/IB,H,Top-tier; SOFR-Eurodollar splice
+treasury_future,SR1,1M SOFR,future,2018-05-07,2018-05-07,Norgate/CSI,splice to ZQ approx for pre-2018,Norgate/CSI,H,
+treasury_future,GE_ED,Eurodollar 3M (legacy),future,1981-12,1981-12,Norgate/CSI,GE 1981 -> converted to SOFR 2023-04-14,Norgate/CSI,H,First cash-settled future; deep STIR history
+commodity_future,CL,WTI crude oil,future,1983-03-30,1946,Norgate/CSI,Macrotrends WTI annual 1946 / EIA 1986 -> CL 1983,Norgate/CSI/IB,H,Top-tier energy
+commodity_future,MCL,Micro WTI crude,future,2021-07-12,1946,Norgate/CSI,splice onto CL,Norgate/CSI,H,Secondary
+commodity_future,QM,E-mini crude,future,2002,1983-03-30,Norgate/CSI,splice onto CL,Norgate/CSI,M,Secondary
+commodity_future,BZ,Brent crude (financial),future,1988-06,1987-05,Norgate/CSI/ICE,Brent spot EIA 1987 -> ICE Brent 1988,Norgate/CSI/ICE,H,Global top-tier; CME BZ=Brent Last-Day Financial
+commodity_future,HO,Heating oil / ULSD,future,1978,1979,Norgate/CSI,HO 1978-79,Norgate/CSI/IB,H,Secondary; ULSD spec 2013
+commodity_future,RB,RBOB gasoline,future,2005-10,1984,Norgate/CSI,HU unleaded 1984 -> RB 2005,Norgate/CSI/IB,H,Secondary
+commodity_future,NG,Henry Hub natural gas,future,1990-04,1990-04,Norgate/CSI,NG 1990 (EIA spot 1997),Norgate/CSI/IB,H,Top-tier energy
+commodity_future,QG,E-mini natural gas,future,2002,1990-04,Norgate/CSI,splice onto NG,Norgate/CSI,M,Secondary
+commodity_future,MNG,Micro Henry Hub natural gas,future,2023-11-06,1990-04,Norgate/CSI,splice onto NG,Norgate/CSI,H,Secondary new
+commodity_future,GC,Gold,future,1974-12-31,1833,Norgate/CSI,NMA annual gold 1833 / LBMA fix 1968 -> GC 1974,Norgate/CSI/IB,H,Top-tier metal
+commodity_future,MGC,Micro gold (10 oz),future,2010-10-04,1833,Norgate/CSI,splice onto GC,Norgate/CSI,H,Secondary
+commodity_future,SI,Silver,future,1963,1975,Norgate/CSI,COMEX silver 1963 / continuous ~1975; LBMA silver,Norgate/CSI/IB,H,Top-tier metal
+commodity_future,SIL,Micro silver (1000 oz),future,2010,1963,Norgate/CSI,splice onto SI,Norgate/CSI,L,Verify exact launch
+commodity_future,HG,Copper (high grade),future,1988-07-29,1959,Norgate/CSI,Macrotrends copper 1959 / COMEX -> HG 1988,Norgate/CSI/IB,H,Top-tier base metal
+commodity_future,MHG,Micro copper,future,2022-05-02,1959,Norgate/CSI,splice onto HG,Norgate/CSI,H,Secondary
+commodity_future,PL,Platinum,future,1956,1968,Norgate/CSI,NYMEX platinum 1956 / continuous ~1968,Norgate/CSI,M,Secondary
+commodity_future,PA,Palladium,future,1968,1977,Norgate/CSI,NYMEX palladium 1968 / continuous ~1977,Norgate/CSI,M,Secondary; thin
+commodity_future,ALI,Aluminum (NA physical),future,2014-05-05,2014-05-05,Norgate/CSI,ALI 2014 (LME for deep history),Norgate/CSI,H,Secondary; LME separate
+commodity_future,ZC,Corn,future,1877,1959,CSI/Pinnacle,CBOT corn pit 1877 / continuous ~1959,CSI/Norgate/IB,H,Top-tier grain
+commodity_future,ZS,Soybeans,future,1936-10,1959,CSI/Pinnacle,CBOT soybeans 1936 / continuous ~1959-69,CSI/Norgate/IB,H,Top-tier
+commodity_future,ZW,Wheat (SRW),future,1877,1959,CSI/Pinnacle,CBOT wheat pit 1877 / continuous ~1959,CSI/Norgate/IB,H,Top-tier
+commodity_future,KE,Wheat (HRW),future,1876,1970,CSI/Pinnacle,KCBT HRW 1876 / continuous ~1970; KCBT->CME 2012,CSI/Norgate,M,
+commodity_future,ZL,Soybean oil,future,1946,1959,CSI/Pinnacle,CBOT soyoil 1946 / continuous ~1959-69,CSI/Norgate,H,Liquid
+commodity_future,ZM,Soybean meal,future,1947,1959,CSI/Pinnacle,CBOT soymeal 1947 / continuous ~1959-69,CSI/Norgate,H,Liquid
+commodity_future,ZO,Oats,future,1877,1959,CSI/Pinnacle,CBOT oats 1877 / continuous ~1959,CSI/Norgate,M,Thin
+commodity_future,ZR,Rough rice,future,1994,1986,CSI/Pinnacle,MidAm rice ~1981 -> CBOT 1994,CSI/Norgate,M,Thin
+commodity_future,MWE,HRS spring wheat,future,1883,1970s,CSI/Pinnacle,MGEX HRS 1883 / continuous ~1970s,CSI/Norgate,M,Thinner; MGEX->MIAX
+commodity_future,SB,Sugar No.11,future,1961,1961,CSI/Pinnacle,NY sugar 1914 / No.11 world ~1961,CSI/Norgate/IB,H,Top-tier soft
+commodity_future,KC,Coffee C,future,1960s,1972,CSI/Pinnacle,NY coffee 1882 / Coffee-C continuous ~1972,CSI/Norgate/IB,H,Top-tier soft
+commodity_future,CC,Cocoa,future,1925,1959,CSI/Pinnacle,NY Cocoa 1925 / continuous ~1959-70,CSI/Norgate/IB,H,Liquid
+commodity_future,CT,Cotton No.2,future,1870,1959,CSI/Pinnacle,NY Cotton 1870 / continuous ~1959-72,CSI/Norgate/IB,H,Liquid
+commodity_future,OJ,Orange juice (FCOJ),future,1966,1967,CSI/Pinnacle,NYCE FCOJ 1966 / continuous ~1967,CSI/Norgate,M,Thin
+commodity_future,LBR,Lumber (physical new),future,2023,1969,CSI/Pinnacle,Random Length Lumber LBS 1969 -> LBR 2023,CSI/Norgate,H,Thin
+commodity_future,LE,Live cattle,future,1964,1964,CSI/Pinnacle,CME live cattle 1964,CSI/Norgate/IB,H,Top-tier livestock
+commodity_future,GF,Feeder cattle,future,1971,1971,CSI/Pinnacle,CME feeder cattle 1971,CSI/Norgate,H,Med-high
+commodity_future,HE,Lean hogs,future,1966,1966,CSI/Pinnacle,Live hog 1966 -> lean hog cash-settled 1997 (splice break),CSI/Norgate/IB,H,Top-tier; methodology break 1997
+rate_series,DGS10,10Y constant-maturity Treasury yield,yield,1962-01-02,1871,FRED,Shiller 1871 -> GS10 1953 -> DGS10 1962,FRED,H,Yield not return
+rate_series,GS10,10Y CMT yield monthly,yield,1953-04,1871,FRED,Shiller long rate 1871 -> GS10 1953,FRED,H,
+rate_series,TB3MS,3M T-bill rate,yield,1934-01,1934-01,FRED,TB3MS 1934,FRED,H,Deepest short rate
+rate_series,DGS30,30Y CMT yield,yield,1977-02,1977-02,FRED,DGS30 (gap 2002-2006),FRED,M,Handle gap explicitly
+bond_total_return,US10Y_TR,10Y T-bond total return annual,total_return,1928,1928,Damodaran (NYU Stern),Damodaran histretSP 1928,Damodaran,H,Annual
+bond_total_return,USAGG_TR,Bloomberg US Aggregate Bond TR,total_return,1976-01,1976-01,Bloomberg,Bloomberg US Agg 1976,Bloomberg,H,
+bond_total_return,LTGOVT_TR,Ibbotson long-term govt bond TR,total_return,1926,1926,Ibbotson/SBBI,SBBI 1926 (pre-1977 modeled),Morningstar,H,
+commodity_index,GSCI,S&P GSCI commodity index,index,1991,1970,S&P DJI,GSCI back-tested 1970 (hypothetical pre-1991),S&P DJI,H,
+commodity_index,BCOM,Bloomberg Commodity Index,index,1991,1960,Bloomberg,BCOM back-calc 1960 (hypothetical pre-1991),Bloomberg,H,
+commodity_index,CRB,Refinitiv/CoreCommodity CRB Index,index,1957,1947,LSEG/CoreCommodity,CRB live 1957 (base 1947-49),LSEG,H,Oldest live broad index
+commodity_spot,GOLD_SPOT,Gold spot price,spot,1968,1833,NMA/LBMA,NMA annual 1833 / LBMA PM fix 1968,WGC Goldhub,H,
+commodity_spot,WTI_SPOT,WTI crude spot,spot,1986,1946,EIA/Macrotrends,Macrotrends annual 1946 / EIA daily 1986,EIA,H,
+equity_index,SP500_IDX,S&P 500 index,index,1957-03-04,1871,Shiller/S&P DJI,Shiller composite 1871 -> S&P500 1957,FRED/yfinance,H,TR daily from 1988
+equity_index,NDX,Nasdaq-100 index,index,1985-01-31,1985-01-31,Nasdaq,NDX 1985,yfinance,H,
+equity_index,RUT,Russell 2000 index,index,1987-09-10,1987-09-10,FTSE Russell,RUT 1987 (base 1978-12),yfinance,H,
+equity_index,DJI,Dow Jones Industrial Average,index,1896-05-26,1896-05-26,S&P DJI,DJIA 1896,yfinance,H,Price only
+equity_index,VIX,Cboe VIX index,index,1990-01-02,1986-01-02,Cboe,VXO methodology 1986 -> VIX 1990,Cboe,H,Spot index (VX futures from 2004)
+equity_index,MKT_TR_DAILY,US market total return daily (factor),index,1926-07-01,1926-07-01,Ken French Data Library,Ken French market TR 1926,Dartmouth,H,Free deepest daily equity TR
 etf,SPY,SPDR S&P 500 Trust,etf,1993-01-22,1988,Tiingo/yfinance,S&P500 TR 1988 -> SPY 1993,Tiingo/Stooq,H,First US ETF
 etf,IVV,iShares Core S&P 500,etf,2000-05-15,1988,Tiingo/yfinance,S&P500 TR -> IVV 2000,Tiingo,H,
 etf,VOO,Vanguard S&P 500,etf,2010-09-07,1976,Tiingo/yfinance,VFINX 1976 -> VOO 2010,Tiingo,H,
-etf,QQQ,Invesco QQQ Trust,etf,1999-03-10,1985-01-31,Tiingo/yfinance,NDX/XNDX 1985 -> QQQ 1999,Tiingo,H,Was QQQQ 2004-2011
+etf,QQQ,Invesco QQQ Trust,etf,1999-03-10,1985-01-31,Tiingo/yfinance,NDX/XNDX 1985 -> QQQ 1999,Tiingo,H,
 etf,IWM,iShares Russell 2000,etf,2000-05-22,1978-12-31,Tiingo/yfinance,Russell 2000 TR -> IWM 2000,Tiingo,H,
 etf,DIA,SPDR Dow Jones Industrial,etf,1998-01-14,1896,Tiingo/yfinance,DJITR -> DIA 1998,Tiingo,H,
 etf,VTI,Vanguard Total Stock Market,etf,2001-05-24,1992,Tiingo/yfinance,VTSMX 1992 -> VTI 2001,Tiingo,H,
@@ -57,48 +172,3 @@ etf,GSG,iShares S&P GSCI Commodity,etf,2006-07-10,1970,Tiingo/yfinance,S&P GSCI 
 etf,DBA,Invesco DB Agriculture,etf,2007-01-05,1989,Tiingo/yfinance,DBIQ Ag ER ~1989 -> DBA,Tiingo,H,Futures-backed
 etf,EFA,iShares MSCI EAFE,etf,2001-08-14,1969-12-31,Tiingo/yfinance,MSCI EAFE NR 1969 -> EFA,Tiingo,H,International (optional)
 etf,EEM,iShares MSCI Emerging Markets,etf,2003-04-07,1987-12-31,Tiingo/yfinance,MSCI EM 1987 -> EEM,Tiingo,H,International (optional)
-treasury_future,ZB,30Y T-Bond future,future,1977-08-22,1977-08-22,Norgate/CSI,ZB 1977 (splice ZB->UB for long end),Norgate/CSI,H,Deliverable basket drifted
-treasury_future,UB,Ultra T-Bond future,future,2010-01,1977-08-22,Norgate/CSI,ZB 1977 -> UB 2010,Norgate/CSI,H,
-treasury_future,ZN,10Y T-Note future,future,1982,1982,Norgate/CSI,ZN 1982,Norgate/CSI,H,
-treasury_future,ZF,5Y T-Note future,future,1988,1988,Norgate/CSI,ZF 1988,Norgate/CSI,M,
-treasury_future,ZT,2Y T-Note future,future,1990,1990,Norgate/CSI,ZT 1990,Norgate/CSI,H,
-treasury_future,TN,Ultra 10Y T-Note future,future,2016-01,2016-01,Norgate/CSI,TN 2016,Norgate/CSI,H,
-treasury_future,GE,Eurodollar 3M future,future,1981-12,1981-12,Norgate/CSI,GE 1981 -> SOFR 2023,Norgate/CSI,H,Converted to SOFR 2023
-treasury_future,SR3,3M SOFR future,future,2018-05-07,1981-12,Norgate/CSI,splice GE -> SR3,Norgate/CSI,H,
-treasury_future,ZQ,30-Day Fed Funds future,future,1988-10,1988-10,Norgate/CSI,ZQ 1988,Norgate/CSI,L,Verify exact inception
-rate_series,DGS10,10Y constant-maturity Treasury yield,yield,1962-01-02,1871,FRED,Shiller 1871 -> GS10 1953 -> DGS10 1962,FRED,H,Yield not return
-rate_series,GS10,10Y CMT yield monthly,yield,1953-04,1871,FRED,Shiller long rate 1871 -> GS10 1953,FRED,H,
-rate_series,TB3MS,3M T-bill rate,yield,1934-01,1934-01,FRED,TB3MS 1934,FRED,H,Deepest short rate
-rate_series,DGS30,30Y CMT yield,yield,1977-02,1977-02,FRED,DGS30 (gap 2002-2006),FRED,M,Handle gap explicitly
-bond_total_return,US10Y_TR,10Y T-bond total return annual,total_return,1928,1928,Damodaran (NYU Stern),Damodaran histretSP 1928,Damodaran,H,Annual
-bond_total_return,USAGG_TR,Bloomberg US Aggregate Bond TR,total_return,1976-01,1976-01,Bloomberg,Bloomberg US Agg 1976,Bloomberg,H,
-bond_total_return,LTGOVT_TR,Ibbotson long-term govt bond TR,total_return,1926,1926,Ibbotson/SBBI (Morningstar),SBBI 1926 (pre-1977 modeled),Morningstar,H,
-commodity_future,CL,WTI crude oil future,future,1983-03-30,1946,Norgate/CSI,Macrotrends annual WTI 1946 -> CL 1983,Norgate/CSI,H,
-commodity_future,BZ,Brent crude future,future,1988-06,1988-06,Norgate/CSI,BZ/IPE 1988,Norgate/CSI,H,
-commodity_future,NG,Henry Hub natural gas future,future,1990-04,1990-04,Norgate/CSI,NG 1990,Norgate/CSI,H,
-commodity_future,HO,Heating oil/ULSD future,future,1978,1978,Norgate/CSI,HO 1978,Norgate/CSI,M,Exact month uncertain
-commodity_future,RB,RBOB gasoline future,future,2005-10,1984,Norgate/CSI,HU 1984 -> RB 2005,Norgate/CSI,H,
-commodity_future,GC,Gold future,future,1974-12-31,1833,Norgate/CSI,NMA annual 1833 / LBMA 1968 -> GC 1974,Norgate/CSI,H,
-commodity_future,SI,Silver future,future,1963-06,1963-06,Norgate/CSI,COMEX silver 1963,Norgate/CSI,M,1933 context only
-commodity_future,HG,Copper future,future,1959,1959,Norgate/CSI,COMEX copper 1959,Norgate/CSI,M,
-commodity_future,PL,Platinum future,future,1956,1956,Norgate/CSI,NYMEX platinum 1956,Norgate/CSI,L,Verify inception
-commodity_future,PA,Palladium future,future,1968,1968,Norgate/CSI,NYMEX palladium 1968,Norgate/CSI,L,Verify inception
-commodity_future,ZC,Corn future,future,1877,1959,CSI/Pinnacle,CBOT corn pit 1877 / continuous ~1959,CSI/Norgate,M,Continuous starts later than pit
-commodity_future,ZS,Soybeans future,future,1936-10,1969,CSI/Pinnacle,CBOT soybeans 1936 / continuous ~1969,CSI/Norgate,H,
-commodity_future,ZW,Wheat (SRW) future,future,1877,1959,CSI/Pinnacle,CBOT wheat pit 1877 / continuous ~1959,CSI/Norgate,M,
-commodity_future,SB,Sugar No.11 future,future,1960s,1960s,CSI/Pinnacle,Sugar11 world continuous ~1960s,CSI/Norgate,M,
-commodity_future,KC,Coffee C future,future,1972,1972,CSI/Pinnacle,Coffee-C continuous ~1972,CSI/Norgate,M,
-commodity_future,CC,Cocoa future,future,1925,1959,CSI/Pinnacle,NY Cocoa 1925 / continuous ~1959,CSI/Norgate,M,
-commodity_future,CT,Cotton No.2 future,future,1870,1959,CSI/Pinnacle,NY Cotton 1870 / continuous ~1959,CSI/Norgate,M,
-commodity_future,LE,Live cattle future,future,1964,1964,CSI/Pinnacle,CME live cattle 1964,CSI/Norgate,H,
-commodity_future,HE,Lean hogs future,future,1996,1966,CSI/Pinnacle,Live hog 1966 -> lean hog 1996,CSI/Norgate,H,
-commodity_index,GSCI,S&P GSCI commodity index,index,1991,1970,S&P DJI,GSCI back-tested 1970 (hypothetical pre-1991),S&P DJI,H,
-commodity_index,BCOM,Bloomberg Commodity Index,index,1991,1960,Bloomberg,BCOM back-calc 1960 (hypothetical pre-1991),Bloomberg,H,
-commodity_index,CRB,Refinitiv/CoreCommodity CRB Index,index,1957,1947,LSEG/CoreCommodity,CRB live 1957 (base 1947-49),LSEG,H,Oldest live broad index
-commodity_spot,GOLD_SPOT,Gold spot price,spot,1968,1833,NMA/LBMA,NMA annual 1833 / LBMA PM fix 1968,WGC Goldhub,H,
-commodity_spot,WTI_SPOT,WTI crude spot,spot,1986,1946,EIA/Macrotrends,Macrotrends annual 1946 / EIA daily 1986,EIA,H,
-equity_index,SP500,S&P 500 index,index,1957-03-04,1871,Shiller/S&P DJI,Shiller composite 1871 -> S&P500 1957,FRED/yfinance,H,TR daily from 1988
-equity_index,NDX,Nasdaq-100 index,index,1985-01-31,1985-01-31,Nasdaq,NDX 1985,yfinance,H,
-equity_index,RUT,Russell 2000 index,index,1987,1987,FTSE Russell,RUT 1987 (base 1978-12),yfinance,H,
-equity_index,DJI,Dow Jones Industrial Average,index,1896-05-26,1896-05-26,S&P DJI,DJIA 1896,yfinance,H,Price only
-equity_index,MKT_TR_DAILY,US market total return daily (factor),index,1926-07-01,1926-07-01,Ken French Data Library,Ken French market TR 1926,Dartmouth,H,Free deepest daily equity TR
