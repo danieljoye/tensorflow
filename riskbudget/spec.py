@@ -46,6 +46,7 @@ from riskbudget.registry import REGISTRY, Registry
 # ---------------------------------------------------------------------------
 
 PositiveInt = Annotated[int, Field(gt=0)]
+PositiveFloat = Annotated[float, Field(gt=0)]
 
 
 class BlackLittermanViewsSpec(BaseModel):
@@ -204,6 +205,12 @@ class StrategySpec(BaseModel):
     periods_per_year: PositiveInt = 252
     risk_free_rate: float = 0.0
     seed: int = 0
+
+    # Optional volatility-targeting overlay: when set, the constructed book is
+    # re-levered each rebalance to this annualized volatility (ex-ante, capped at
+    # ``target_vol_max_leverage``). None disables it (fully-invested as solved).
+    target_volatility: PositiveFloat | None = None
+    target_vol_max_leverage: PositiveFloat = 3.0
 
     start: date | None = None
     end: date | None = None

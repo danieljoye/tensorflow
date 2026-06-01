@@ -87,6 +87,15 @@ def construct(spec: StrategySpec, *, prices: PriceData | None = None) -> Portfol
     mu = mean_model.estimate(returns) if mean_model is not None else None
 
     method = spec.build_method()
+    if spec.target_volatility is not None:
+        from riskbudget.optimize.voltarget import VolatilityTargetConstructor
+
+        method = VolatilityTargetConstructor(
+            method,
+            target_volatility=spec.target_volatility,
+            periods_per_year=spec.periods_per_year,
+            max_leverage=spec.target_vol_max_leverage,
+        )
     budget = spec.build_budget()
     constraints = spec.build_constraints()
 
@@ -137,6 +146,15 @@ def backtest(spec: StrategySpec, *, prices: PriceData | None = None) -> Backtest
     risk_model = spec.build_risk_model()
     mean_model = spec.build_mean_model()
     method = spec.build_method()
+    if spec.target_volatility is not None:
+        from riskbudget.optimize.voltarget import VolatilityTargetConstructor
+
+        method = VolatilityTargetConstructor(
+            method,
+            target_volatility=spec.target_volatility,
+            periods_per_year=spec.periods_per_year,
+            max_leverage=spec.target_vol_max_leverage,
+        )
     budget = spec.build_budget()
     constraints = spec.build_constraints()
     schedule = spec.build_schedule()
