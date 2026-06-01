@@ -8,34 +8,6 @@ equity_universe,NDX100,Nasdaq-100,universe,1985-01-31,2000,Wikipedia (Nasdaq-100
 equity_universe,R1000,Russell 1000,universe,1984,1984,FTSE Russell (licensed),annual June recon (semi-annual 2026+),Norgate/FTSE,H,No reliable free PIT
 equity_universe,R2000,Russell 2000,universe,1984,1984,FTSE Russell (licensed),annual June recon,Norgate/FTSE,H,Small-cap benchmark
 equity_universe,R3000,Russell 3000,universe,1984,1984,FTSE Russell (licensed),annual June recon,Norgate/FTSE,H,~97% investable US equity
-equity,GE,General Electric (GE Aerospace),equity,1892,1925-12,CRSP (WRDS); free 1962,CRSP daily 1925 / free 1962,Tiingo/Norgate,H,NYSE 1892; original DJIA name
-equity,IBM,International Business Machines,equity,1915,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,H,NYSE 1915
-equity,KO,Coca-Cola,equity,1919,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,H,NYSE 1919
-equity,PG,Procter & Gamble,equity,1891,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,H,NYSE 1891
-equity,XOM,Exxon Mobil,equity,1920s,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,H,Ex-Standard Oil NJ
-equity,CVX,Chevron,equity,1920s,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,H,Ex-Standard Oil Calif
-equity,MO,Altria,equity,1920s,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,H,Ex-Philip Morris
-equity,PEP,PepsiCo,equity,1919,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,M,Pepsi/Loft lineage
-equity,GD,General Dynamics,equity,1925,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,M,Electric Boat lineage
-equity,HON,Honeywell,equity,1925,1925-12,CRSP; free 1962,CRSP 1925 / free 1962,Tiingo/Norgate,M,Allied Chemical lineage
-equity,GIS,General Mills,equity,1928,1928,CRSP; free 1962,CRSP 1928 / free 1962,Tiingo/Norgate,M,NYSE 1928
-equity,CAT,Caterpillar,equity,1929,1929,CRSP; free 1962,CRSP 1929 / free 1962,Tiingo/Norgate,H,NYSE 1929
-equity,BA,Boeing,equity,1934,1934,CRSP; free 1962,CRSP 1934 / free 1962,Tiingo/Norgate,H,NYSE 1934
-equity,JNJ,Johnson & Johnson,equity,1944-09,1944,CRSP; free 1962,CRSP 1944 / free 1962,Tiingo/Norgate,H,IPO 1944
-equity,PFE,Pfizer,equity,1942,1944,CRSP; free 1962-1972,CRSP 1944 / free 1962-72,Tiingo/Norgate,M,NYSE 1942
-equity,MRK,Merck & Co,equity,1941,1946,CRSP; free 1962,CRSP ~1946 / free 1962,Tiingo/Norgate,M,
-equity,MMM,3M,equity,1946,1946,CRSP; free 1962,CRSP 1946 / free 1962,Tiingo/Norgate,M,
-equity,F,Ford Motor,equity,1956-01,1956,CRSP; free 1962-1972,CRSP 1956 / free 1972,Tiingo/Norgate,M,IPO 1956
-equity,DIS,Walt Disney,equity,1957-11,1957,CRSP; free 1962,CRSP 1957 / free 1962,Tiingo/Norgate,H,NYSE 1957
-equity,HPQ,HP Inc,equity,1961,1961,CRSP; free 1962,CRSP 1961 / free 1962,Tiingo/Norgate,M,NYSE 1961
-equity,MCD,McDonalds,equity,1965-04,1965,CRSP; free 1966,CRSP 1965 / free 1966,Tiingo/Norgate,H,IPO 1965
-equity,JPM,JPMorgan Chase,equity,1969,1969,CRSP; free 1980,CRSP 1969 / free ~1980,Tiingo/Norgate,M,Modern lineage
-equity,WMT,Walmart,equity,1972-08,1970,CRSP; free 1972,CRSP 1970 / free 1972,Tiingo/Norgate,H,NYSE 1972
-equity,INTC,Intel,equity,1971-10,1972,CRSP; free 1980,CRSP Nasdaq 1972 / free ~1980,Tiingo/Norgate,M,IPO 1971
-equity,AXP,American Express,equity,1977,1972,CRSP; free 1972,CRSP 1972 / free 1972,Tiingo/Norgate,M,
-equity,HD,Home Depot,equity,1981-09,1981,CRSP; free 1981,IPO 1981,Tiingo/Norgate,H,IPO 1981
-equity,GM,General Motors,equity,2010-11-18,2010-11-18,CRSP; free 2010,new GM IPO 2010 (old GM delisted 2009),Tiingo/Norgate,H,Entity discontinuity
-equity,T,AT&T,equity,1984,1925-12,CRSP; free 1962,old AT&T CRSP 1925; current=SBC lineage 1984,Tiingo/Norgate,M,Ticker continuity != entity
 equity_index,SP500_IDX,S&P 500 index,index,1957-03-04,1871,Shiller/S&P DJI,Shiller composite 1871 -> S&P500 1957,FRED/yfinance,H,TR daily from 1988
 equity_index,NDX,Nasdaq-100 index,index,1985-01-31,1985-01-31,Nasdaq,NDX 1985,yfinance,H,
 equity_index,RUT,Russell 2000 index,index,1987-09-10,1987-09-10,FTSE Russell,RUT 1987 (base 1978-12),yfinance,H,
