@@ -42,6 +42,15 @@ dev = [
     "mypy>=1.9",
     "pandas-stubs",
 ]
+# Optional reference libraries used ONLY by skippable cross-check tests
+# (``pytest.importorskip``) that validate our implementations against published
+# references — never imported at runtime (BUILD_PLAN §3.1, §7). Owned by the
+# integration agent (one owner) to avoid concurrent edits.
+crosscheck = [
+    "riskparityportfolio",
+    "pyportfolioopt",
+    "pyrb",
+]
 
 [project.urls]
 Homepage = "https://example.com/riskbudget"
