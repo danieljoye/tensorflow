@@ -93,7 +93,6 @@ def construct(spec: StrategySpec, *, prices: PriceData | None = None) -> Portfol
         method = VolatilityTargetConstructor(
             method,
             target_volatility=spec.target_volatility,
-            periods_per_year=spec.periods_per_year,
             max_leverage=spec.target_vol_max_leverage,
         )
     budget = spec.build_budget()
@@ -152,7 +151,6 @@ def backtest(spec: StrategySpec, *, prices: PriceData | None = None) -> Backtest
         method = VolatilityTargetConstructor(
             method,
             target_volatility=spec.target_volatility,
-            periods_per_year=spec.periods_per_year,
             max_leverage=spec.target_vol_max_leverage,
         )
     budget = spec.build_budget()

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import pytest
 import riskbudget as rb
@@ -26,29 +24,28 @@ class _EqualWeight:
 
 
 def test_leverage_hits_target_exante() -> None:
-    vt = VolatilityTargetConstructor(_EqualWeight(), target_volatility=0.10, periods_per_year=12)
+    # COV here stands in for the (annualized) window covariance. Its equal-weight
+    # vol (~2%) needs ~5x leverage to reach 10%, so lift the cap above that.
+    vt = VolatilityTargetConstructor(_EqualWeight(), target_volatility=0.10, max_leverage=20.0)
     port = vt.construct(COV, constraints=None)
-    # the scaled book's annualized ex-ante vol equals the 10% target
-    sigma_annual = port.volatility(COV) * math.sqrt(12)
-    assert sigma_annual == pytest.approx(0.10, rel=1e-6)
+    # the scaled book's ex-ante (annualized) vol equals the 10% target
+    assert port.volatility(COV) == pytest.approx(0.10, rel=1e-6)
     assert port.leverage == pytest.approx(sum(abs(w) for w in port.weights.values()))
 
 
 def test_leverage_capped() -> None:
     # tiny covariance -> would need huge leverage; cap binds
     tiny = COV * 1e-6
-    vt = VolatilityTargetConstructor(
-        _EqualWeight(), target_volatility=0.10, periods_per_year=12, max_leverage=2.5
-    )
+    vt = VolatilityTargetConstructor(_EqualWeight(), target_volatility=0.10, max_leverage=2.5)
     port = vt.construct(tiny, constraints=None)
     assert port.leverage == pytest.approx(2.5, rel=1e-9)
 
 
 def test_invalid_params_raise() -> None:
     with pytest.raises(OptimizationError):
-        VolatilityTargetConstructor(_EqualWeight(), target_volatility=0.0, periods_per_year=12)
+        VolatilityTargetConstructor(_EqualWeight(), target_volatility=0.0)
     with pytest.raises(OptimizationError):
-        VolatilityTargetConstructor(_EqualWeight(), target_volatility=0.1, periods_per_year=0)
+        VolatilityTargetConstructor(_EqualWeight(), target_volatility=0.1, max_leverage=0.0)
 
 
 def test_spec_backtest_applies_targeting() -> None:

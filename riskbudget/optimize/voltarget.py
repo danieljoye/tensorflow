@@ -6,10 +6,13 @@ annualized volatility** hits a target. The scale (leverage) is recomputed at eac
 rebalance from the same trailing-window covariance the inner method used, so it is
 strictly point-in-time (no look-ahead):
 
-    sigma_period = sqrt(wᵀ Σ w)              # per-period vol from the window cov
-    sigma_annual = sigma_period · √periods   # annualized
+    sigma_annual = sqrt(wᵀ Σ w)              # Σ is the (annualized) window covariance
     leverage     = clip(target / sigma_annual, 0, max_leverage)
     w_scaled     = leverage · w
+
+Σ is the covariance the risk model produced for the window, annualized to the run
+frequency (the spec's ``periods_per_year`` is propagated to the risk model), so
+``sqrt(wᵀ Σ w)`` is already the annualized portfolio volatility.
 
 When ``leverage > 1`` the book is levered (the residual is implicitly financed at
 the risk-free rate); when ``leverage < 1`` the residual sits in cash. Because the
@@ -22,7 +25,6 @@ level.
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
@@ -44,9 +46,8 @@ class VolatilityTargetConstructor:
         Any ``PortfolioConstructor`` (has ``construct``) or risk-budget
         ``Optimizer`` (has ``solve``).
     target_volatility:
-        Target **annualized** volatility (e.g. ``0.10`` for 10%).
-    periods_per_year:
-        Annualization factor for the window covariance (12 monthly, 252 daily).
+        Target **annualized** volatility (e.g. ``0.10`` for 10%). Interpreted in
+        the same units as the (annualized) window covariance.
     max_leverage:
         Cap on the gross exposure (default 3.0) to bound leverage when realized
         vol is very low.
@@ -57,18 +58,14 @@ class VolatilityTargetConstructor:
         inner: object,
         *,
         target_volatility: float,
-        periods_per_year: int,
         max_leverage: float = 3.0,
     ) -> None:
         if target_volatility <= 0:
             raise OptimizationError("target_volatility must be positive.")
-        if periods_per_year <= 0:
-            raise OptimizationError("periods_per_year must be positive.")
         if max_leverage <= 0:
             raise OptimizationError("max_leverage must be positive.")
         self.inner = inner
         self.target_volatility = float(target_volatility)
-        self.periods_per_year = int(periods_per_year)
         self.max_leverage = float(max_leverage)
 
     def _inner_portfolio(
@@ -91,8 +88,7 @@ class VolatilityTargetConstructor:
 
     def leverage_for(self, portfolio: Portfolio, cov: np.ndarray) -> float:
         """Ex-ante leverage that brings ``portfolio`` to the target annual vol."""
-        sigma_period = float(portfolio.volatility(np.asarray(cov, dtype=float)))
-        sigma_annual = sigma_period * math.sqrt(self.periods_per_year)
+        sigma_annual = float(portfolio.volatility(np.asarray(cov, dtype=float)))
         if sigma_annual <= 0.0:
             return 0.0
         return min(self.target_volatility / sigma_annual, self.max_leverage)

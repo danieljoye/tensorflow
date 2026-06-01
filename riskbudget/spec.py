@@ -297,10 +297,25 @@ class StrategySpec(BaseModel):
             ) from exc
 
     def build_risk_model(self) -> Any:
-        """Instantiate the configured :class:`RiskModel`."""
+        """Instantiate the configured :class:`RiskModel`.
+
+        Propagates the run's ``periods_per_year`` to factories that accept it (so
+        the covariance is annualized to the *data* frequency, not a hardcoded 252),
+        unless the user pinned it explicitly in ``risk_model_params``.
+        """
+        import inspect
+
         factory = self._registry.risk_model(self.risk_model)
+        params = dict(self.risk_model_params)
+        if "periods_per_year" not in params:
+            try:
+                sig = inspect.signature(factory)
+            except (TypeError, ValueError):  # pragma: no cover - builtins
+                sig = None
+            if sig is not None and "periods_per_year" in sig.parameters:
+                params["periods_per_year"] = self.periods_per_year
         try:
-            return factory(**self.risk_model_params)
+            return factory(**params)
         except Exception as exc:
             raise ConfigurationError(
                 f"Could not build risk model {self.risk_model!r}: {exc}"
