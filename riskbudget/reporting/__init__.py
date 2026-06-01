@@ -11,6 +11,7 @@ builders (:func:`equity_curve_figure`, :func:`drawdown_figure`,
 
 from __future__ import annotations
 
+from riskbudget.reporting.comparison import build_comparison_report
 from riskbudget.reporting.report import (
     Report,
     build_report,
@@ -22,6 +23,7 @@ from riskbudget.reporting.report import (
 
 __all__ = [
     "Report",
+    "build_comparison_report",
     "build_report",
     "drawdown_figure",
     "equity_curve_figure",
