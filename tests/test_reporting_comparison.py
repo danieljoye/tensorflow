@@ -18,11 +18,14 @@ def _make_result(
     idx = pd.date_range("2000-01-31", periods=periods, freq="ME")
     rets = pd.Series(rng.normal(mu, sigma, len(idx)), index=idx)
     equity = (1.0 + rets).cumprod()
+    w = rng.dirichlet([3.0, 2.0], len(idx))  # two assets summing to 1 each row
+    weights = pd.DataFrame(w, index=idx, columns=["STOCKS", "BONDS"])
     return BacktestResult(
         equity_curve=equity,
-        weights=pd.DataFrame({"X": 1.0}, index=idx),
+        weights=weights,
         returns=rets,
-        metadata={"name": name},
+        metadata={"name": name, "frequency": "monthly", "lookback": 60},
+        diagnostics={"n_rebalances": len(idx)},
     )
 
 
@@ -45,10 +48,28 @@ def test_comparison_report_one_row_per_strategy(results: dict[str, BacktestResul
 
 def test_comparison_report_has_overlay_figures(results: dict[str, BacktestResult]) -> None:
     rep = build_comparison_report(results, periods_per_year=12)
-    assert set(rep.figures) == {"equity_curve", "drawdown"}
+    assert set(rep.figures) == {"composition", "equity_curve", "drawdown"}
     # one trace per strategy on each overlay
-    for fig in rep.figures.values():
-        assert len(fig.data) == 3
+    for name in ("equity_curve", "drawdown"):
+        assert len(rep.figures[name].data) == 3
+    # composition: one bar trace per asset (STOCKS, BONDS)
+    assert len(rep.figures["composition"].data) == 2
+
+
+def test_comparison_report_marks_composition_and_rebalance(
+    results: dict[str, BacktestResult],
+) -> None:
+    rep = build_comparison_report(results, periods_per_year=12)
+    # composition figure is a stacked bar of mean weights, one trace per asset
+    comp = rep.figures["composition"]
+    assert comp.layout.barmode == "stack"
+    assert {tr.name for tr in comp.data} == {"STOCKS", "BONDS"}
+    # rebalancing cadence is made explicit in the subtitle + metadata
+    assert "Monthly rebalancing" in rep.subtitle
+    assert "60-period lookback" in rep.subtitle
+    assert rep.metadata["rebalance"] == rep.subtitle
+    html = rep.to_html(include_plotlyjs=False)
+    assert "Monthly rebalancing" in html
 
 
 def test_comparison_report_renders_self_contained_html(

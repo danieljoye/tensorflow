@@ -57,6 +57,55 @@ def _overlay_figure(frame: pd.DataFrame, title: str, ytitle: str, *, log_y: bool
     return fig
 
 
+def _composition_figure(results: Mapping[str, BacktestResult]) -> Any:
+    """Stacked-bar of each strategy's *average* portfolio weights (composition)."""
+    go = _require_plotly()
+    comp = pd.DataFrame(
+        {name: res.weights.mean() for name, res in results.items() if res.weights is not None}
+    ).T  # rows = strategies, cols = assets
+    fig = go.Figure()
+    for asset in comp.columns:
+        fig.add_trace(
+            go.Bar(
+                x=comp.index.astype(str),
+                y=comp[asset].to_numpy(),
+                name=str(asset),
+                text=[f"{v:.0%}" for v in comp[asset]],
+                textposition="inside",
+            )
+        )
+    fig.update_layout(
+        title="Average portfolio composition (mean weight by asset)",
+        barmode="stack",
+        xaxis_title="Strategy",
+        yaxis_title="Weight",
+        yaxis_tickformat=".0%",
+        template="plotly_white",
+        legend_title="Asset",
+        height=420,
+    )
+    return fig
+
+
+def _rebalance_subtitle(results: Mapping[str, BacktestResult]) -> str:
+    """Build an explicit rebalancing/period caption from result metadata."""
+    res = next(iter(results.values()))
+    meta = res.metadata or {}
+    freq = str(meta.get("frequency", "?")).capitalize()
+    lookback = meta.get("lookback")
+    n_reb = (res.diagnostics or {}).get("n_rebalances")
+    w = res.weights
+    span = ""
+    if w is not None and len(w):
+        span = f" · {pd.Timestamp(w.index[0]):%Y-%m} → {pd.Timestamp(w.index[-1]):%Y-%m}"
+    parts = [f"{freq} rebalancing"]
+    if lookback is not None:
+        parts.append(f"{lookback}-period lookback")
+    if n_reb is not None:
+        parts.append(f"{n_reb} rebalances")
+    return " · ".join(parts) + span
+
+
 def build_comparison_report(
     results: Mapping[str, BacktestResult],
     *,
@@ -115,14 +164,19 @@ def build_comparison_report(
     dd = pd.DataFrame({name: drawdown(rets[name].dropna())["drawdown"] for name in rets.columns})
 
     figures = {
+        "composition": _composition_figure(results),
         "equity_curve": _overlay_figure(
             equity, "Growth of $1 (rebased)", "Growth of $1", log_y=log_equity
         ),
         "drawdown": _overlay_figure(dd, "Drawdown", "Drawdown", log_y=False),
     }
+    subtitle = _rebalance_subtitle(results)
     metadata: dict[str, Any] = {
         "strategies": list(results.keys()),
         "n_periods": len(rets),
         "periods_per_year": periods_per_year,
+        "rebalance": subtitle,
     }
-    return Report(title=title, summary=summary, figures=figures, metadata=metadata)
+    return Report(
+        title=title, subtitle=subtitle, summary=summary, figures=figures, metadata=metadata
+    )

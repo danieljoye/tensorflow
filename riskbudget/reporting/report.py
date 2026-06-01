@@ -69,6 +69,7 @@ class Report:
     summary: pd.DataFrame
     figures: dict[str, go.Figure] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
+    subtitle: str = ""
 
     def to_html(self, *, include_plotlyjs: str | bool = "cdn", full_html: bool = True) -> str:
         """Render the report to a single HTML string.
@@ -96,9 +97,11 @@ class Report:
             chart_blocks.append(f'<section class="chart" id="chart-{name}">{fragment}</section>')
             first = False
 
+        subtitle_html = f'<p class="subtitle">{self.subtitle}</p>\n' if self.subtitle else ""
         body = (
             f"<h1>{self.title}</h1>\n"
-            f'<section class="summary"><h2>Summary statistics</h2>{summary_html}</section>\n'
+            + subtitle_html
+            + f'<section class="summary"><h2>Summary statistics</h2>{summary_html}</section>\n'
             + "\n".join(chart_blocks)
         )
 
@@ -111,6 +114,7 @@ class Report:
             f"<title>{self.title}</title>\n"
             "<style>"
             "body{font-family:system-ui,Arial,sans-serif;margin:2rem;}"
+            "p.subtitle{color:#555;font-size:1.05rem;margin-top:-0.5rem;}"
             "table.summary-stats{border-collapse:collapse;}"
             "table.summary-stats th,table.summary-stats td"
             "{padding:4px 10px;text-align:right;border-bottom:1px solid #ddd;}"
