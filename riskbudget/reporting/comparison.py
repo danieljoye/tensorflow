@@ -87,20 +87,21 @@ def _composition_figure(results: Mapping[str, BacktestResult]) -> Any:
     return fig
 
 
-def _rebalance_subtitle(results: Mapping[str, BacktestResult]) -> str:
+def _rebalance_subtitle(results: Mapping[str, BacktestResult], periods_per_year: int) -> str:
     """Build an explicit rebalancing/period caption from result metadata."""
     res = next(iter(results.values()))
     meta = res.metadata or {}
     freq = str(meta.get("frequency", "?")).capitalize()
     lookback = meta.get("lookback")
     n_reb = (res.diagnostics or {}).get("n_rebalances")
+    unit = "day" if periods_per_year >= 252 else "month" if periods_per_year == 12 else "period"
     w = res.weights
     span = ""
     if w is not None and len(w):
         span = f" · {pd.Timestamp(w.index[0]):%Y-%m} → {pd.Timestamp(w.index[-1]):%Y-%m}"
     parts = [f"{freq} rebalancing"]
     if lookback is not None:
-        parts.append(f"{lookback}-period lookback")
+        parts.append(f"{lookback}-{unit} lookback (covariance & vol)")
     if n_reb is not None:
         parts.append(f"{n_reb} rebalances")
     return " · ".join(parts) + span
@@ -170,7 +171,7 @@ def build_comparison_report(
         ),
         "drawdown": _overlay_figure(dd, "Drawdown", "Drawdown", log_y=False),
     }
-    subtitle = _rebalance_subtitle(results)
+    subtitle = _rebalance_subtitle(results, periods_per_year)
     metadata: dict[str, Any] = {
         "strategies": list(results.keys()),
         "n_periods": len(rets),

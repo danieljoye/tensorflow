@@ -66,7 +66,7 @@ def test_comparison_report_marks_composition_and_rebalance(
     assert {tr.name for tr in comp.data} == {"STOCKS", "BONDS"}
     # rebalancing cadence is made explicit in the subtitle + metadata
     assert "Monthly rebalancing" in rep.subtitle
-    assert "60-period lookback" in rep.subtitle
+    assert "60-month lookback" in rep.subtitle
     assert rep.metadata["rebalance"] == rep.subtitle
     html = rep.to_html(include_plotlyjs=False)
     assert "Monthly rebalancing" in html
