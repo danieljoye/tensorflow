@@ -36,58 +36,9 @@ adjusted-close ≈ total return; splice it to the index **TR**.
 PIT membership matters: build the universe as it *was* on each date (incl. later-delisted
 names) or backtests are survivorship-biased. Free S&P 500 membership ~2000+; Russell is licensed.
 
-### 1b. Deep-history anchor stocks (explicit — longest single-name daily series)
-
-Free retail feeds bottom at the **~1962 wall**; only **CRSP** (paid/academic) goes deeper —
-daily to **1926** (Pre62), monthly to **Dec 1925**. Per-name earliest:
-
-| Ticker | Company | GICS sector | Free-feed daily | CRSP earliest |
-|---|---|---|---|---|
-| GE | General Electric | Industrials | 1962 | **1925-12** (NYSE 1892) |
-| IBM | IBM | Info Tech | 1962 | **1925-12** (1915) |
-| KO | Coca-Cola | Staples | 1962 | **1925-12** (1919) |
-| PG | Procter & Gamble | Staples | 1962 | **1925-12** (1891) |
-| XOM | Exxon Mobil | Energy | 1962 | **1925-12** |
-| CVX | Chevron | Energy | 1962 | **1925-12** |
-| MO | Altria | Staples | 1962 | **1925-12** |
-| PEP | PepsiCo | Staples | 1962 | **1925-12** |
-| GD | General Dynamics | Industrials | 1962 | **1925-12** |
-| HON | Honeywell | Industrials | 1962 | **1925-12** |
-| T | AT&T | Comm Svcs | 1962 | 1925-12 (old AT&T; entity break 1984) |
-| GIS | General Mills | Staples | 1962 | 1928 |
-| CAT | Caterpillar | Industrials | 1962 | 1929 |
-| BA | Boeing | Industrials | 1962 | 1934 |
-| MRK | Merck | Health Care | 1962 | ~1946 |
-| MMM | 3M | Industrials | 1962 | 1946 |
-| JNJ | Johnson & Johnson | Health Care | 1962 | 1944 |
-| PFE | Pfizer | Health Care | 1962–72 | 1944 |
-| F | Ford Motor | Cons Disc | 1962–72 | 1956 |
-| DIS | Walt Disney | Comm Svcs | 1962 | 1957 |
-| HPQ | HP Inc | Info Tech | 1962 | 1961 |
-| MCD | McDonald's | Cons Disc | 1966 | 1965 |
-| JPM | JPMorgan Chase | Financials | ~1980 | 1969 |
-| WMT | Walmart | Staples | 1972 | 1970 |
-| INTC | Intel | Info Tech | ~1980 | 1972 (Nasdaq) |
-| AXP | American Express | Financials | 1972 | 1972 |
-| HD | Home Depot | Cons Disc | 1981 | 1981 |
-| GM | General Motors | Cons Disc | 2010 | 2010 (new entity) |
-
-> **Entity ≠ ticker:** GM (old delisted 2009, new IPO 2010), T (1984 breakup), DD/DOW (2017
-> merge / 2019 split), HON (AlliedSignal 1999). Bias-free history must follow CRSP PERMNO chains
-> and apply delisting returns — not the ticker.
-
-### 1c. Sector representation (current liquid large caps, by GICS)
-
-IT: AAPL MSFT NVDA AVGO ORCL · Comm Svcs: GOOGL META NFLX DIS T · Cons Disc: AMZN TSLA HD MCD
-NKE · Staples: PG KO PEP COST WMT · Health: LLY JNJ UNH ABBV MRK · Financials: BRK.B JPM V MA
-BAC · Industrials: CAT GE BA HON UNP · Energy: XOM CVX COP SLB EOG · Materials: LIN SHW FCX NEM
-ECL · Real Estate: AMT PLD EQIX WELL SPG · Utilities: NEE SO DUK CEG AEP.
-
-### 1d. Single-stock daily history by source
-
-CRSP **1962-07-02** daily / **1926** Pre62 / **1925-12** monthly (bias-free, incl. delisting
-returns) · Norgate **1950** (bias-free) · Sharadar **1998** (bias-free) · Tiingo / yfinance /
-Stooq **~1962** (survivor-only). Pre-1962 daily single-stock is CRSP-only.
+> **Single-name stocks are intentionally excluded** — this universe trades indices, ETFs,
+> and futures, not individual companies. Equity exposure is obtained through the index
+> vehicles in §2 (futures + ETF + cash-index history).
 
 ---
 
