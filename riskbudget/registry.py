@@ -27,7 +27,7 @@ Categories
 - **allocators** — dynamic (temporal) allocators (``cppi``, ``fixed_mix``,
   ``glidepath``, ``floor``, ``drawdown``, ``fund_separation``).
 - **data sources** — :class:`~riskbudget.core.interfaces.DataSource` factories
-  (``synthetic``, ``csv``, ``tiingo``).
+  (``synthetic``, ``csv``, ``tiingo``, ``shiller``, ``gold``).
 - **backtesters** — ``walkforward``.
 - **cost models** — ``proportional``, ``none``.
 
@@ -123,6 +123,20 @@ def _tiingo_factory() -> Factory:
     from riskbudget.data.providers import tiingo_data_source
 
     return tiingo_data_source
+
+
+def _shiller_factory() -> Factory:
+    """Lazily import the Shiller deep-history provider factory."""
+    from riskbudget.data.providers import shiller_data_source
+
+    return shiller_data_source
+
+
+def _gold_factory() -> Factory:
+    """Lazily import the gold deep-history provider factory."""
+    from riskbudget.data.providers import gold_data_source
+
+    return gold_data_source
 
 
 class Registry:
@@ -280,6 +294,8 @@ def default_registry() -> Registry:
     for name, factory in DATA_SOURCE_FACTORIES.items():
         reg.register_data_source(name, factory)
     reg.register_data_source("tiingo", _LazyTiingo())
+    reg.register_data_source("shiller", _LazyProvider(_shiller_factory))
+    reg.register_data_source("gold", _LazyProvider(_gold_factory))
 
     return reg
 
@@ -289,6 +305,21 @@ class _LazyTiingo:
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return _tiingo_factory()(*args, **kwargs)
+
+
+class _LazyProvider:
+    """Defers importing a provider module until the factory is actually called.
+
+    Used to keep ``import riskbudget`` light: the deep-history providers (and any
+    network transport they may use) are only imported when their data source is
+    constructed.
+    """
+
+    def __init__(self, loader: Callable[[], Factory]) -> None:
+        self._loader = loader
+
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
+        return self._loader()(*args, **kwargs)
 
 
 #: The process-wide default registry.
