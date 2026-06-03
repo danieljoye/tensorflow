@@ -26,7 +26,7 @@ from riskbudget.registry import REGISTRY
 
 START = date(1968, 1, 1)
 END = date(2024, 1, 1)
-ASSETS = ["STOCKS", "BONDS", "GOLD"]
+ASSETS = ["STOCKS", "STOCKS_TR", "BONDS", "GOLD"]
 
 
 @pytest.fixture
@@ -110,6 +110,26 @@ def test_stocks_grow_over_the_full_window(panel: DailyPanelDataSource) -> None:
     assert stocks.iloc[-1] > stocks.iloc[0]
 
 
+def test_stocks_tr_outgrows_price_leg(panel: DailyPanelDataSource) -> None:
+    # Over the full panel, reinvested dividends compound, so the total-return
+    # index grows strictly more than the price-only index.
+    frame = panel.get_prices(["STOCKS", "STOCKS_TR"], START, END).frame
+    px_growth = frame["STOCKS"].iloc[-1] / frame["STOCKS"].iloc[0]
+    tr_growth = frame["STOCKS_TR"].iloc[-1] / frame["STOCKS_TR"].iloc[0]
+    assert tr_growth > px_growth
+
+
+def test_stocks_tr_is_positive_and_daily(panel: DailyPanelDataSource) -> None:
+    prices = panel.get_prices(["STOCKS_TR"], START, END)
+    tr = prices.frame["STOCKS_TR"]
+    assert (tr > 0).all()
+    # Rebased to 100 on the first aligned row.
+    assert tr.iloc[0] == pytest.approx(100.0)
+    # Daily cadence: a single calendar year holds far more than 12 rows.
+    one_year = panel.get_prices(["STOCKS_TR"], date(2000, 1, 1), date(2000, 12, 31))
+    assert one_year.shape[0] > 200
+
+
 # ---------------------------------------------------------------------------
 # Date-window restriction
 # ---------------------------------------------------------------------------
@@ -181,10 +201,17 @@ _STOCKS_RAW = (
 )
 _DGS10_RAW = "observation_date,DGS10\n1968-01-02,6.0\n1968-01-03,5.0\n"
 _GOLD_RAW = "date,Gold Price\n1968-01-02,35.0\n1968-01-03,36.0\n"
+# Monthly Shiller dividend mirror: ``Date,SP500,Dividend,...`` (yield = Dividend/SP500).
+_SHILLER_RAW = (
+    "Date,SP500,Dividend,Earnings,Consumer Price Index,Long Interest Rate,"
+    "Real Price,Real Dividend,Real Earnings,PE10\n"
+    "1968-01-01,96.0,2.88,0,0,0,0,0,0,0\n"
+    "1968-02-01,90.0,2.97,0,0,0,0,0,0,0\n"
+)
 
 
 def test_assemble_panel_aligns_and_derives() -> None:
-    frame = assemble_panel(_STOCKS_RAW, _DGS10_RAW, _GOLD_RAW)
+    frame = assemble_panel(_STOCKS_RAW, _DGS10_RAW, _GOLD_RAW, _SHILLER_RAW)
     assert list(frame.columns) == ASSETS
     # Pre-1885 stock backfill row dropped; gold/yield define the 2-row overlap.
     assert list(frame.index) == [pd.Timestamp(1968, 1, 2), pd.Timestamp(1968, 1, 3)]
@@ -195,6 +222,16 @@ def test_assemble_panel_aligns_and_derives() -> None:
     assert frame["BONDS"].iloc[0] == pytest.approx(1.0)
     expected_day2 = 1.0 + (0.06 / 252.0 - 8.0 * (0.05 - 0.06))
     assert frame["BONDS"].iloc[1] == pytest.approx(expected_day2)
+    # STOCKS_TR rebased to 100 on the first aligned date; day-2 return is the
+    # price change plus the daily slice of the ffilled monthly dividend yield.
+    assert frame["STOCKS_TR"].iloc[0] == pytest.approx(100.0)
+    y0 = 2.88 / 96.0  # Jan yield, ffilled onto 1968-01-02
+    expected_tr2 = 100.0 * (1.0 + (110.0 / 100.0 - 1.0) + y0 / 252.0)
+    assert frame["STOCKS_TR"].iloc[1] == pytest.approx(expected_tr2)
+    # Dividend carry makes STOCKS_TR grow at least as fast as the price leg.
+    tr_growth = frame["STOCKS_TR"].iloc[-1] / frame["STOCKS_TR"].iloc[0]
+    px_growth = frame["STOCKS"].iloc[-1] / frame["STOCKS"].iloc[0]
+    assert tr_growth > px_growth
 
 
 def test_assemble_panel_skips_blank_and_dot_yields() -> None:
@@ -204,7 +241,7 @@ def test_assemble_panel_skips_blank_and_dot_yields() -> None:
         "Data,Otwarcie,Najwyzszy,Najnizszy,Zamkniecie,Wolumen\n"
         "1968-01-02,1,1,1,100,0\n1968-01-03,1,1,1,110,0\n1968-01-04,1,1,1,120,0\n"
     )
-    frame = assemble_panel(stocks, dgs10, gold)
+    frame = assemble_panel(stocks, dgs10, gold, _SHILLER_RAW)
     # The ``.`` yield row is dropped, so 1968-01-03 falls out of the inner join.
     assert list(frame.index) == [pd.Timestamp(1968, 1, 2), pd.Timestamp(1968, 1, 4)]
 
@@ -214,7 +251,7 @@ def test_assemble_panel_empty_overlap_raises() -> None:
     dgs10 = "observation_date,DGS10\n1990-01-02,8.0\n"
     gold = "date,Gold Price\n2000-01-02,280.0\n"
     with pytest.raises(DataError, match="empty after aligning"):
-        assemble_panel(stocks, dgs10, gold)
+        assemble_panel(stocks, dgs10, gold, _SHILLER_RAW)
 
 
 # ---------------------------------------------------------------------------

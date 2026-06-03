@@ -5,13 +5,18 @@ serve *monthly* deep history, this adapter serves the longest **daily** multi-as
 panel reachable from the GitHub-only allowlist of this build environment. It mirrors
 the same two-transport pattern as the Tiingo / Shiller / gold providers:
 
+- :meth:`DailyPanelDataSource.from_github` — **live and canonical**, downloads
+  four daily source CSVs from GitHub raw mirrors (``requests`` imported lazily,
+  falling back to ``urllib``) and re-assembles the panel via
+  :func:`assemble_panel`. This is the **current path**: it fetches fresh on every
+  call so the panel stays up to date with the upstream mirrors. Prefer this for
+  real usage.
 - :meth:`DailyPanelDataSource.from_fixtures` — **offline**, reads a committed,
   pre-assembled daily panel CSV under ``examples/data/daily_panel_long.csv``
-  (``Date`` index + ``STOCKS`` / ``BONDS`` / ``GOLD`` columns). This is what the
-  test-suite and the offline example use; it needs no network.
-- :meth:`DailyPanelDataSource.from_github` — **live**, downloads three daily
-  source CSVs from GitHub raw mirrors (``requests`` imported lazily, falling back
-  to ``urllib``) and re-assembles the identical panel via :func:`assemble_panel`.
+  (``Date`` index + ``STOCKS`` / ``STOCKS_TR`` / ``BONDS`` / ``GOLD`` columns).
+  The fixture is an **offline CI cache** of the live result, periodically
+  refreshed/regenerated from the live sources; it is what the test-suite and the
+  ``--offline`` example path use, and it needs no network.
 
 Both transports converge on the same in-memory frame; the offline tests therefore
 exercise the real alignment/derivation logic, only the *transport* differs.
@@ -22,6 +27,12 @@ Sources (all verified fetchable via ``raw.githubusercontent.com`` in this sandbo
   **1885-01-01** (Stooq ``^spx`` reconstruction mirrored at
   ``ai357060/flower``: ``Data/spx_d.csv``). Pre-1885 rows in that file are
   monthly-spaced backfill and are dropped.
+- ``STOCKS_TR`` — a **dividend-adjusted total-return** index for the S&P price
+  leg. The annualized monthly dividend yield ``y = Dividend / SP500`` (from the
+  Shiller datahub mirror) is forward-filled onto the daily index and spread
+  across the trading year (``daily_div = y / 252``); the daily total return is
+  the price change plus that carry, ``r_t = STOCKS.pct_change() + daily_div``,
+  cumulated to a level series rebased to 100 on the first aligned date.
 - ``BONDS`` — a 10-year Treasury **total-return PROXY** built from the daily
   ``DGS10`` constant-maturity yield (FRED series, daily from **1962-01-02**,
   mirrored at ``juanfp02/commodities_and_sovereigns``: ``data/DGS10.csv``). The
@@ -71,6 +82,10 @@ _GOLD_URL = (
     "https://raw.githubusercontent.com/UtaHagen/PortfolioProject/main/Data/"
     "economic_indicators_daily.csv"
 )
+# Shiller datahub mirror (monthly ``Date,SP500,Dividend,...``) used to derive the
+# dividend yield for STOCKS_TR. The ``Dividend`` column is the annualized dividend
+# per index point; the monthly yield is ``Dividend / SP500``.
+_SHILLER_DIV_URL = "https://raw.githubusercontent.com/datasets/s-and-p-500/main/data/data.csv"
 
 # Modified duration used by the BONDS total-return proxy (years). Documented above.
 _BOND_MOD_DUR = 8.0
@@ -80,7 +95,7 @@ _BOND_MOD_DUR = 8.0
 _STOCKS_DAILY_START = pd.Timestamp("1885-01-01")
 
 # The assets this source serves (panel column order).
-_ASSETS = ("STOCKS", "BONDS", "GOLD")
+_ASSETS = ("STOCKS", "STOCKS_TR", "BONDS", "GOLD")
 
 
 def _parse_fixture(text: str) -> pd.DataFrame:
@@ -204,6 +219,65 @@ def _stooq_spx_close(text: str) -> pd.Series:
     return series[series.index >= _STOCKS_DAILY_START]
 
 
+def _shiller_div_yield(text: str) -> pd.Series:
+    """Parse the monthly dividend yield ``y = Dividend / SP500`` from Shiller data.
+
+    The datahub Shiller CSV carries a monthly ``Dividend`` column (annualized
+    dividend per index point) alongside the ``SP500`` price level. The yield is
+    their ratio; rows with a missing/zero price are skipped (a zero ``Dividend``
+    is a legitimate yield of 0 and is kept).
+    """
+    reader = csv.DictReader(StringIO(text))
+    if reader.fieldnames is None:
+        raise DataError("Shiller dividend CSV is empty (no header row).")
+    required = {"Date", "SP500", "Dividend"}
+    missing = required.difference(reader.fieldnames)
+    if missing:
+        raise DataError(
+            f"Shiller dividend CSV is missing required columns: {sorted(missing)}. "
+            f"Found: {reader.fieldnames!r}."
+        )
+    dates: list[pd.Timestamp] = []
+    yields: list[float] = []
+    for row in reader:
+        raw_date = row.get("Date")
+        if not raw_date:
+            continue
+        raw_price = (row.get("SP500") or "").strip()
+        raw_div = (row.get("Dividend") or "").strip()
+        if raw_price in ("", ".") or raw_div in ("", "."):
+            continue
+        try:
+            ts = pd.Timestamp(raw_date).normalize()
+            price = float(raw_price)
+            div = float(raw_div)
+        except (TypeError, ValueError):
+            continue
+        if price <= 0.0:
+            continue
+        dates.append(ts)
+        yields.append(div / price)
+    if not dates:
+        raise DataError("Shiller dividend CSV contained no usable rows.")
+    series = pd.Series(yields, index=pd.DatetimeIndex(dates), name="DIV_YIELD")
+    return series[~series.index.duplicated(keep="last")].sort_index()
+
+
+def _stocks_tr_index(stocks: pd.Series, div_yield: pd.Series) -> pd.Series:
+    """Build the daily dividend-adjusted total-return index for the S&P price leg.
+
+    The annualized monthly yield is forward-filled onto the (already date-aligned)
+    daily ``stocks`` index and spread across the trading year, then added to the
+    daily price change and cumulated. See the module docstring for the formula.
+    The result is rebased to 100 on the first aligned date.
+    """
+    daily_div = div_yield.reindex(stocks.index, method="ffill") / 252.0
+    r_t = stocks.pct_change() + daily_div
+    tr = (1.0 + r_t.fillna(0.0)).cumprod()
+    tr = tr / float(tr.iloc[0]) * 100.0
+    return tr.rename("STOCKS_TR")
+
+
 def _bond_tr_from_yield(yield_pct: pd.Series) -> pd.Series:
     """Build the constant-duration 10Y total-return proxy from a daily yield (%).
 
@@ -214,12 +288,20 @@ def _bond_tr_from_yield(yield_pct: pd.Series) -> pd.Series:
     return (1.0 + daily_ret).cumprod().rename("BONDS")
 
 
-def assemble_panel(stocks_text: str, dgs10_text: str, gold_text: str) -> pd.DataFrame:
-    """Assemble the aligned daily panel from the three raw source payloads.
+def assemble_panel(
+    stocks_text: str,
+    dgs10_text: str,
+    gold_text: str,
+    shiller_text: str,
+) -> pd.DataFrame:
+    """Assemble the aligned daily panel from the four raw source payloads.
 
     This is the shared derivation used by the **live** transport; the offline
-    transport reads the already-assembled result. The ``BONDS`` proxy is rebased
-    to 1.0 on the first row of the aligned (inner-join) panel.
+    transport reads the already-assembled result. ``STOCKS_TR`` is the
+    dividend-adjusted total-return index for the S&P price leg (derived from the
+    Shiller dividend yield in ``shiller_text``), rebased to 100 on the first row
+    of the aligned (inner-join) panel; the ``BONDS`` proxy is rebased to 1.0 on
+    that same first row.
 
     Raises
     ------
@@ -233,6 +315,12 @@ def assemble_panel(stocks_text: str, dgs10_text: str, gold_text: str) -> pd.Data
     panel = pd.concat([stocks, bonds, gold], axis=1, join="inner").dropna(how="any")
     if panel.empty:
         raise DataError("Daily panel is empty after aligning STOCKS/BONDS/GOLD.")
+    panel.columns = ["STOCKS", "BONDS", "GOLD"]
+
+    # Derive STOCKS_TR on the aligned dates so it is rebased to the panel start.
+    div_yield = _shiller_div_yield(shiller_text)
+    panel["STOCKS_TR"] = _stocks_tr_index(panel["STOCKS"], div_yield)
+
     panel = panel.loc[:, list(_ASSETS)].copy()
     panel["BONDS"] = panel["BONDS"] / panel["BONDS"].iloc[0]
     panel.index.name = "Date"
@@ -253,8 +341,8 @@ class DailyPanelDataSource:
         Path to a committed panel CSV. When set, the adapter reads from disk and
         never touches the network.
     urls:
-        ``(stocks, dgs10, gold)`` live CSV URLs (github transport). Ignored when
-        ``fixture_path`` is set.
+        ``(stocks, dgs10, gold, shiller)`` live CSV URLs (github transport).
+        Ignored when ``fixture_path`` is set.
     timeout:
         Per-request timeout in seconds for the live transport.
     """
@@ -263,7 +351,7 @@ class DailyPanelDataSource:
         self,
         *,
         fixture_path: Path | str | None = None,
-        urls: tuple[str, str, str] | None = None,
+        urls: tuple[str, str, str, str] | None = None,
         timeout: float = 30.0,
     ) -> None:
         self._fixture_path = Path(fixture_path) if fixture_path is not None else None
@@ -289,11 +377,18 @@ class DailyPanelDataSource:
     def from_github(
         cls,
         *,
-        urls: tuple[str, str, str] | None = None,
+        urls: tuple[str, str, str, str] | None = None,
         timeout: float = 30.0,
     ) -> DailyPanelDataSource:
-        """Build a **live** adapter that downloads + re-assembles from GitHub."""
-        return cls(urls=urls or (_STOCKS_URL, _DGS10_URL, _GOLD_URL), timeout=timeout)
+        """Build a **live** adapter that downloads + re-assembles from GitHub.
+
+        This is the canonical/current path: it fetches fresh on every
+        :meth:`get_prices` call so the panel tracks the upstream mirrors.
+        """
+        return cls(
+            urls=urls or (_STOCKS_URL, _DGS10_URL, _GOLD_URL, _SHILLER_DIV_URL),
+            timeout=timeout,
+        )
 
     # -- DataSource protocol -----------------------------------------------
 
@@ -356,8 +451,8 @@ class DailyPanelDataSource:
     def _fetch_live(self) -> pd.DataFrame:
         """Download the three sources and re-assemble. Network path only."""
         assert self._urls is not None  # narrowed by caller
-        stocks_text, dgs10_text, gold_text = (self._download(u) for u in self._urls)
-        return assemble_panel(stocks_text, dgs10_text, gold_text)
+        stocks_text, dgs10_text, gold_text, shiller_text = (self._download(u) for u in self._urls)
+        return assemble_panel(stocks_text, dgs10_text, gold_text, shiller_text)
 
     def _download(self, url: str) -> str:
         """Download one CSV. ``requests`` is imported lazily (urllib fallback)."""
@@ -383,7 +478,7 @@ def daily_panel_data_source(
     *,
     fixture_path: Path | str | None = None,
     live: bool = False,
-    urls: tuple[str, str, str] | None = None,
+    urls: tuple[str, str, str, str] | None = None,
 ) -> DailyPanelDataSource:
     """Registry-friendly factory (BUILD_PLAN §5.2) for :class:`DailyPanelDataSource`.
 
