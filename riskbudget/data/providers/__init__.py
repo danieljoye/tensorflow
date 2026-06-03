@@ -42,6 +42,10 @@ registry-friendly factory callable (``tiingo_data_source``) per BUILD_PLAN §5.2
 
 from __future__ import annotations
 
+from riskbudget.data.providers.daily import (
+    DailyPanelDataSource,
+    daily_panel_data_source,
+)
 from riskbudget.data.providers.gold import (
     GoldDataSource,
     gold_data_source,
@@ -56,9 +60,11 @@ from riskbudget.data.providers.tiingo import (
 )
 
 __all__ = [
+    "DailyPanelDataSource",
     "GoldDataSource",
     "ShillerDataSource",
     "TiingoDataSource",
+    "daily_panel_data_source",
     "gold_data_source",
     "shiller_data_source",
     "tiingo_data_source",

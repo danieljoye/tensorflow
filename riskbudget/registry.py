@@ -139,6 +139,13 @@ def _gold_factory() -> Factory:
     return gold_data_source
 
 
+def _daily_panel_factory() -> Factory:
+    """Lazily import the long daily multi-asset panel provider factory."""
+    from riskbudget.data.providers import daily_panel_data_source
+
+    return daily_panel_data_source
+
+
 class Registry:
     """A mutable name→factory registry over every implementation category.
 
@@ -296,6 +303,7 @@ def default_registry() -> Registry:
     reg.register_data_source("tiingo", _LazyTiingo())
     reg.register_data_source("shiller", _LazyProvider(_shiller_factory))
     reg.register_data_source("gold", _LazyProvider(_gold_factory))
+    reg.register_data_source("daily_panel", _LazyProvider(_daily_panel_factory))
 
     return reg
 
