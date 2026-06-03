@@ -44,12 +44,20 @@ Sources (all verified fetchable via ``raw.githubusercontent.com`` in this sandbo
   (~8y) proxy methodology the Shiller provider documents — it ignores convexity,
   roll-down and the exact bond cash-flow schedule. Use it for illustrative
   multi-asset risk-budgeting demos, not production bond analytics.
-- ``GOLD`` — daily gold spot price (USD/oz), daily from **1968-01-02**
-  (LBMA/London-fix daily series mirrored at ``UtaHagen/PortfolioProject``:
-  ``Data/economic_indicators_daily.csv``).
+- ``GOLD`` — daily LBMA Gold Price PM fix (USD/oz), daily from **1968-04-01**,
+  **current and auto-updating**: the ``unbalancedparentheses/forex-centuries``
+  repo refreshes ``data/sources/lbma/lbma_gold_daily.csv`` via a weekly GitHub
+  Actions cron (Mondays 06:00 UTC), so the live transport stays fresh through the
+  present. The file is ``date,gold_pm_usd,gold_pm_gbp,gold_pm_eur``; only the USD
+  column (the 2nd column, picked up by :func:`_parse_two_col`) is used. This
+  replaces the previously-used static ``UtaHagen/PortfolioProject`` mirror, which
+  ended 2023-12-28; over their 14k-day overlap the two series agree to a mean
+  relative difference of ~0.4% (AM/PM-fix and spot/fix timing account for the few
+  isolated larger gaps), so the swap preserves the historical level.
 
-The aligned (inner-join) daily panel spans **1968-01-02 -> 2023-12-28**
-(~13.7k rows); the start date is bounded by the gold series.
+The aligned (inner-join) daily panel spans **1968-04-01 -> 2024-02-26**
+(~14k rows); the start date is bounded by the gold series (1968-04-01) and the
+end date by the STOCKS (Stooq SPX) mirror (2024-02-26).
 
 References
 ----------
@@ -79,8 +87,8 @@ _DGS10_URL = (
     "https://raw.githubusercontent.com/juanfp02/commodities_and_sovereigns/main/data/DGS10.csv"
 )
 _GOLD_URL = (
-    "https://raw.githubusercontent.com/UtaHagen/PortfolioProject/main/Data/"
-    "economic_indicators_daily.csv"
+    "https://raw.githubusercontent.com/unbalancedparentheses/forex-centuries/main/"
+    "data/sources/lbma/lbma_gold_daily.csv"
 )
 # Shiller datahub mirror (monthly ``Date,SP500,Dividend,...``) used to derive the
 # dividend yield for STOCKS_TR. The ``Dividend`` column is the annualized dividend

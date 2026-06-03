@@ -25,7 +25,7 @@ from riskbudget.data.providers.daily import (
 from riskbudget.registry import REGISTRY
 
 START = date(1968, 1, 1)
-END = date(2024, 1, 1)
+END = date(2024, 12, 31)
 ASSETS = ["STOCKS", "STOCKS_TR", "BONDS", "GOLD"]
 
 
@@ -48,7 +48,7 @@ def test_get_prices_returns_pricedata(panel: DailyPanelDataSource) -> None:
     prices = panel.get_prices(ASSETS, START, END)
     assert isinstance(prices, PriceData)
     assert prices.assets == ASSETS
-    # ~13.7k daily rows across the full window.
+    # ~13.6k daily rows across the full window.
     assert prices.shape[0] > 10_000
     assert (prices.values > 0).all()
 
@@ -59,9 +59,10 @@ def test_available_assets(panel: DailyPanelDataSource) -> None:
 
 def test_panel_is_daily_and_deep(panel: DailyPanelDataSource) -> None:
     prices = panel.get_prices(ASSETS, START, END)
-    # The aligned panel starts at the gold series (1968-01-02).
-    assert prices.dates.min() <= pd.Timestamp(1968, 1, 3)
-    assert prices.dates.max() >= pd.Timestamp(2023, 1, 1)
+    # The aligned panel starts at the gold series (1968-04-01).
+    assert prices.dates.min() <= pd.Timestamp(1968, 4, 2)
+    # The current auto-updating gold/stock mirrors push the panel past 2024-01.
+    assert prices.dates.max() >= pd.Timestamp(2024, 1, 1)
     # Daily cadence: a single calendar year holds far more than 12 rows.
     one_year = panel.get_prices(ASSETS, date(2000, 1, 1), date(2000, 12, 31))
     assert one_year.shape[0] > 200
@@ -200,7 +201,11 @@ _STOCKS_RAW = (
     "1968-01-03,100,101,99,110,0\n"
 )
 _DGS10_RAW = "observation_date,DGS10\n1968-01-02,6.0\n1968-01-03,5.0\n"
-_GOLD_RAW = "date,Gold Price\n1968-01-02,35.0\n1968-01-03,36.0\n"
+# forex-centuries LBMA mirror: ``date,gold_pm_usd,gold_pm_gbp,gold_pm_eur``;
+# only the 2nd column (USD) is consumed by ``_parse_two_col``.
+_GOLD_RAW = (
+    "date,gold_pm_usd,gold_pm_gbp,gold_pm_eur\n1968-01-02,35.0,15.0,0\n1968-01-03,36.0,15.2,0\n"
+)
 # Monthly Shiller dividend mirror: ``Date,SP500,Dividend,...`` (yield = Dividend/SP500).
 _SHILLER_RAW = (
     "Date,SP500,Dividend,Earnings,Consumer Price Index,Long Interest Rate,"
@@ -236,7 +241,10 @@ def test_assemble_panel_aligns_and_derives() -> None:
 
 def test_assemble_panel_skips_blank_and_dot_yields() -> None:
     dgs10 = "observation_date,DGS10\n1968-01-02,6.0\n1968-01-03,.\n1968-01-04,5.5\n"
-    gold = "date,Gold Price\n1968-01-02,35.0\n1968-01-03,36.0\n1968-01-04,37.0\n"
+    gold = (
+        "date,gold_pm_usd,gold_pm_gbp,gold_pm_eur\n"
+        "1968-01-02,35.0,15.0,0\n1968-01-03,36.0,15.2,0\n1968-01-04,37.0,15.4,0\n"
+    )
     stocks = (
         "Data,Otwarcie,Najwyzszy,Najnizszy,Zamkniecie,Wolumen\n"
         "1968-01-02,1,1,1,100,0\n1968-01-03,1,1,1,110,0\n1968-01-04,1,1,1,120,0\n"
@@ -249,7 +257,7 @@ def test_assemble_panel_skips_blank_and_dot_yields() -> None:
 def test_assemble_panel_empty_overlap_raises() -> None:
     stocks = "Data,O,H,L,Zamkniecie,V\n1968-01-02,1,1,1,100,0\n"
     dgs10 = "observation_date,DGS10\n1990-01-02,8.0\n"
-    gold = "date,Gold Price\n2000-01-02,280.0\n"
+    gold = "date,gold_pm_usd,gold_pm_gbp,gold_pm_eur\n2000-01-02,280.0,170.0,0\n"
     with pytest.raises(DataError, match="empty after aligning"):
         assemble_panel(stocks, dgs10, gold, _SHILLER_RAW)
 
