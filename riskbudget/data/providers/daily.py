@@ -6,7 +6,7 @@ panel reachable from the GitHub-only allowlist of this build environment. It mir
 the same two-transport pattern as the Tiingo / Shiller / gold providers:
 
 - :meth:`DailyPanelDataSource.from_github` — **live and canonical**, downloads
-  four daily source CSVs from GitHub raw mirrors (``requests`` imported lazily,
+  five daily source CSVs from GitHub raw mirrors (``requests`` imported lazily,
   falling back to ``urllib``) and re-assembles the panel via
   :func:`assemble_panel`. This is the **current path**: it fetches fresh on every
   call so the panel stays up to date with the upstream mirrors. Prefer this for
@@ -23,10 +23,25 @@ exercise the real alignment/derivation logic, only the *transport* differs.
 
 Sources (all verified fetchable via ``raw.githubusercontent.com`` in this sandbox)
 ---------------------------------------------------------------------------------
-- ``STOCKS`` — S&P 500 / SPX **daily close**, true daily granularity from
-  **1885-01-01** (Stooq ``^spx`` reconstruction mirrored at
-  ``ai357060/flower``: ``Data/spx_d.csv``). Pre-1885 rows in that file are
-  monthly-spaced backfill and are dropped.
+- ``STOCKS`` — S&P 500 / SPX **daily close**, **spliced** from two mirrors so the
+  series is both *deep* and *current*:
+
+  * the **deep** leg is the Stooq ``^spx`` reconstruction mirrored at
+    ``ai357060/flower`` (``Data/spx_d.csv``), true daily from **1885-01-01** but
+    **static**, ending **2024-02-26**. Pre-1885 rows are monthly-spaced backfill
+    and are dropped.
+  * the **current** leg is the ``SPX Index`` column of ``Indices.csv`` in the same
+    ``juanfp02/commodities_and_sovereigns`` repo that serves the bond yield. It
+    spans **2000-11-20 -> present** (last dump 2025-12-18) and the maintainer
+    refreshes the whole repo periodically alongside ``DGS10.csv``.
+
+  The two legs are spliced (:func:`_splice_stocks`) at the deep leg's last day:
+  the deep prices are kept verbatim up to and including the seam, and the current
+  leg *after* the seam is multiplied by ``deep[seam] / current[seam]`` so the
+  level is continuous. Over their 5,851-day overlap (2000-11-20 -> 2024-02-26)
+  the two SPX series agree to a mean relative difference of ~0.0002% (100% of
+  days within 0.5%; both are the same SPX, only timestamp/rounding differs), so
+  the splice scale factor is ~1.0016 and the seam is invisible.
 - ``STOCKS_TR`` — a **dividend-adjusted total-return** index for the S&P price
   leg. The annualized monthly dividend yield ``y = Dividend / SP500`` (from the
   Shiller datahub mirror) is forward-filled onto the daily index and spread
@@ -55,9 +70,11 @@ Sources (all verified fetchable via ``raw.githubusercontent.com`` in this sandbo
   relative difference of ~0.4% (AM/PM-fix and spot/fix timing account for the few
   isolated larger gaps), so the swap preserves the historical level.
 
-The aligned (inner-join) daily panel spans **1968-04-01 -> 2024-02-26**
-(~14k rows); the start date is bounded by the gold series (1968-04-01) and the
-end date by the STOCKS (Stooq SPX) mirror (2024-02-26).
+The aligned (inner-join) daily panel spans **1968-04-01 -> ~2025-12** (~14.5k
+rows); the start date is bounded by the gold series (1968-04-01) and the end date
+by whichever of the now-current legs (STOCKS, BONDS, GOLD, Shiller dividends)
+stops first — after this splice the binding end leg is the bond yield (DGS10,
+2025-12-16), not the previously-stale STOCKS mirror.
 
 References
 ----------
@@ -81,8 +98,15 @@ from riskbudget.core.types import PriceData
 # Default committed fixture (offline development / test path).
 _FIXTURE_PATH = Path(__file__).resolve().parents[3] / "examples" / "data" / "daily_panel_long.csv"
 
-# Live GitHub raw mirrors of the three daily source series.
-_STOCKS_URL = "https://raw.githubusercontent.com/ai357060/flower/master/Data/spx_d.csv"
+# Live GitHub raw mirrors of the daily source series.
+# STOCKS is spliced from a deep-but-static leg and a shallow-but-current leg
+# (see the module docstring + :func:`_splice_stocks`).
+_STOCKS_DEEP_URL = "https://raw.githubusercontent.com/ai357060/flower/master/Data/spx_d.csv"
+_STOCKS_CURRENT_URL = (
+    "https://raw.githubusercontent.com/juanfp02/commodities_and_sovereigns/main/data/Indices.csv"
+)
+# Back-compat alias: the deep Stooq leg remains the canonical "stocks" URL name.
+_STOCKS_URL = _STOCKS_DEEP_URL
 _DGS10_URL = (
     "https://raw.githubusercontent.com/juanfp02/commodities_and_sovereigns/main/data/DGS10.csv"
 )
@@ -104,6 +128,10 @@ _STOCKS_DAILY_START = pd.Timestamp("1885-01-01")
 
 # The assets this source serves (panel column order).
 _ASSETS = ("STOCKS", "STOCKS_TR", "BONDS", "GOLD")
+
+# Live-transport URL tuple:
+# ``(stocks_deep, dgs10, gold, shiller, stocks_current)``.
+_UrlTuple = tuple[str, str, str, str, str]
 
 
 def _parse_fixture(text: str) -> pd.DataFrame:
@@ -227,6 +255,81 @@ def _stooq_spx_close(text: str) -> pd.Series:
     return series[series.index >= _STOCKS_DAILY_START]
 
 
+def _indices_spx_close(text: str) -> pd.Series:
+    """Extract the daily SPX close from ``juanfp02/.../data/Indices.csv``.
+
+    The file is **semicolon-delimited** with a ``Dates;EMB US Equity;SPX Index``
+    header. Dates are ``DD.MM.YYYY``; numbers use the European convention
+    (``.`` thousands separator, ``,`` decimal comma, e.g. ``6 800,26`` is written
+    ``6800,26``). Bloomberg ``#N/A N/A`` / blank cells are skipped. The SPX column
+    is located by header name so a column re-order upstream is tolerated.
+    """
+    reader = csv.reader(StringIO(text), delimiter=";")
+    rows = list(reader)
+    if not rows:
+        raise DataError("SPX Index CSV is empty (no header row).")
+    header = rows[0]
+    try:
+        spx_col = header.index("SPX Index")
+    except ValueError as exc:
+        raise DataError(f"SPX Index column not found in Indices CSV header: {header!r}.") from exc
+    dates: list[pd.Timestamp] = []
+    closes: list[float] = []
+    for row in rows[1:]:
+        if len(row) <= spx_col or not row[0]:
+            continue
+        raw = row[spx_col].strip()
+        if raw in ("", ".", "#N/A N/A", "#N/A", "NaN"):
+            continue
+        try:
+            ts = pd.Timestamp(pd.to_datetime(row[0], format="%d.%m.%Y")).normalize()
+            close = float(raw.replace(".", "").replace(",", "."))
+        except (TypeError, ValueError):
+            continue
+        if close <= 0.0:
+            continue
+        dates.append(ts)
+        closes.append(close)
+    if not dates:
+        raise DataError("SPX Index CSV contained no usable rows.")
+    series = pd.Series(closes, index=pd.DatetimeIndex(dates), name="STOCKS")
+    return series[~series.index.duplicated(keep="last")].sort_index()
+
+
+def _splice_stocks(deep: pd.Series, current: pd.Series) -> pd.Series:
+    """Splice a deep-but-static SPX leg onto a shallow-but-current one.
+
+    The deep prices are kept verbatim up to and including the **seam** (the deep
+    leg's last date that also exists in ``current``); the current leg *after* the
+    seam is multiplied by ``deep[seam] / current[seam]`` so the joined level is
+    continuous. If the two legs do not overlap at all, the current leg is rebased
+    onto the deep leg's final level instead (best effort, no seam scale check).
+
+    The result is a strictly-positive daily price level, ascending and de-duped,
+    spanning ``min(deep.start, current.start)`` to ``current.end``.
+    """
+    if deep.empty:
+        out = current.copy()
+        out.name = "STOCKS"
+        return out
+    if current.empty:
+        out = deep.copy()
+        out.name = "STOCKS"
+        return out
+    overlap = deep.index.intersection(current.index)
+    if len(overlap) > 0:
+        seam = overlap.max()
+        scale = float(deep.loc[seam]) / float(current.loc[seam])
+    else:
+        seam = deep.index.max()
+        scale = float(deep.iloc[-1]) / float(current.iloc[0])
+    tail = current[current.index > seam] * scale
+    spliced: pd.Series = pd.concat([deep[deep.index <= seam], tail])
+    spliced = spliced[~spliced.index.duplicated(keep="last")].sort_index()
+    spliced.name = "STOCKS"
+    return spliced
+
+
 def _shiller_div_yield(text: str) -> pd.Series:
     """Parse the monthly dividend yield ``y = Dividend / SP500`` from Shiller data.
 
@@ -301,8 +404,9 @@ def assemble_panel(
     dgs10_text: str,
     gold_text: str,
     shiller_text: str,
+    stocks_current_text: str | None = None,
 ) -> pd.DataFrame:
-    """Assemble the aligned daily panel from the four raw source payloads.
+    """Assemble the aligned daily panel from the raw source payloads.
 
     This is the shared derivation used by the **live** transport; the offline
     transport reads the already-assembled result. ``STOCKS_TR`` is the
@@ -311,12 +415,19 @@ def assemble_panel(
     of the aligned (inner-join) panel; the ``BONDS`` proxy is rebased to 1.0 on
     that same first row.
 
+    ``stocks_text`` is the **deep** static Stooq SPX leg. When
+    ``stocks_current_text`` (the ``Indices.csv`` ``SPX Index`` column) is given it
+    is **spliced** onto the deep leg via :func:`_splice_stocks` so the STOCKS leg
+    runs to the present; when ``None`` only the deep leg is used (back-compat).
+
     Raises
     ------
     DataError
         If any source parses empty or the inner join leaves no overlapping dates.
     """
     stocks = _stooq_spx_close(stocks_text)
+    if stocks_current_text is not None:
+        stocks = _splice_stocks(stocks, _indices_spx_close(stocks_current_text))
     bonds = _bond_tr_from_yield(_parse_two_col(dgs10_text, "DGS10"))
     gold = _parse_two_col(gold_text, "GOLD")
 
@@ -341,7 +452,7 @@ class DailyPanelDataSource:
     Two transports, one logical panel:
 
     - **fixture** (offline): reads the committed pre-assembled CSV.
-    - **github** (network): downloads the three daily sources and re-assembles.
+    - **github** (network): downloads the daily sources and re-assembles.
 
     Parameters
     ----------
@@ -349,8 +460,8 @@ class DailyPanelDataSource:
         Path to a committed panel CSV. When set, the adapter reads from disk and
         never touches the network.
     urls:
-        ``(stocks, dgs10, gold, shiller)`` live CSV URLs (github transport).
-        Ignored when ``fixture_path`` is set.
+        ``(stocks_deep, dgs10, gold, shiller, stocks_current)`` live CSV URLs
+        (github transport). Ignored when ``fixture_path`` is set.
     timeout:
         Per-request timeout in seconds for the live transport.
     """
@@ -359,7 +470,7 @@ class DailyPanelDataSource:
         self,
         *,
         fixture_path: Path | str | None = None,
-        urls: tuple[str, str, str, str] | None = None,
+        urls: _UrlTuple | None = None,
         timeout: float = 30.0,
     ) -> None:
         self._fixture_path = Path(fixture_path) if fixture_path is not None else None
@@ -385,7 +496,7 @@ class DailyPanelDataSource:
     def from_github(
         cls,
         *,
-        urls: tuple[str, str, str, str] | None = None,
+        urls: _UrlTuple | None = None,
         timeout: float = 30.0,
     ) -> DailyPanelDataSource:
         """Build a **live** adapter that downloads + re-assembles from GitHub.
@@ -394,7 +505,14 @@ class DailyPanelDataSource:
         :meth:`get_prices` call so the panel tracks the upstream mirrors.
         """
         return cls(
-            urls=urls or (_STOCKS_URL, _DGS10_URL, _GOLD_URL, _SHILLER_DIV_URL),
+            urls=urls
+            or (
+                _STOCKS_DEEP_URL,
+                _DGS10_URL,
+                _GOLD_URL,
+                _SHILLER_DIV_URL,
+                _STOCKS_CURRENT_URL,
+            ),
             timeout=timeout,
         )
 
@@ -457,10 +575,22 @@ class DailyPanelDataSource:
             ) from exc
 
     def _fetch_live(self) -> pd.DataFrame:
-        """Download the three sources and re-assemble. Network path only."""
+        """Download the sources and re-assemble. Network path only."""
         assert self._urls is not None  # narrowed by caller
-        stocks_text, dgs10_text, gold_text, shiller_text = (self._download(u) for u in self._urls)
-        return assemble_panel(stocks_text, dgs10_text, gold_text, shiller_text)
+        (
+            stocks_text,
+            dgs10_text,
+            gold_text,
+            shiller_text,
+            stocks_current_text,
+        ) = (self._download(u) for u in self._urls)
+        return assemble_panel(
+            stocks_text,
+            dgs10_text,
+            gold_text,
+            shiller_text,
+            stocks_current_text,
+        )
 
     def _download(self, url: str) -> str:
         """Download one CSV. ``requests`` is imported lazily (urllib fallback)."""
@@ -486,7 +616,7 @@ def daily_panel_data_source(
     *,
     fixture_path: Path | str | None = None,
     live: bool = False,
-    urls: tuple[str, str, str, str] | None = None,
+    urls: _UrlTuple | None = None,
 ) -> DailyPanelDataSource:
     """Registry-friendly factory (BUILD_PLAN §5.2) for :class:`DailyPanelDataSource`.
 

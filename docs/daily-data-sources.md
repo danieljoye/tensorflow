@@ -14,13 +14,16 @@ The longest aligned **daily** multi-asset panel verified in this environment:
 
 | Panel | Assets | Span (daily) | Rows |
 |-------|--------|--------------|------|
-| `examples/data/daily_panel_long.csv` | `STOCKS`, `STOCKS_TR`, `BONDS` (10Y TR proxy), `GOLD` | **1968-04-01 → 2024-02-26** | **13,593** |
+| `examples/data/daily_panel_long.csv` | `STOCKS`, `STOCKS_TR`, `BONDS` (10Y TR proxy), `GOLD` | **1968-04-01 → 2025-12-16** | **14,035** |
 
 The start date (**1968**) is bounded by the **gold** series; the **end** date is
-now bounded by the **STOCKS** (Stooq SPX) mirror, which ends 2024-02-26. Equity
-reaches all the way back to **1885** daily and the bond yield to **1962** daily —
-but with no free *daily* gold before 1968 in the allowlist, the three-asset
-intersection begins 1968-04-01 (the first row of the current LBMA gold mirror).
+now bounded by the **BONDS** (FRED `DGS10`) mirror, which currently ends
+2025-12-16. The previously-binding stale STOCKS leg (Stooq SPX, ended 2024-02-26)
+has been **spliced** with a current SPX mirror (below) so it now runs to
+~2025-12. Equity reaches all the way back to **1885** daily and the bond yield to
+**1962** daily — but with no free *daily* gold before 1968 in the allowlist, the
+three-asset intersection begins 1968-04-01 (the first row of the current LBMA
+gold mirror).
 (Adding daily VIX, available 1990+, would further shrink the
 intersection to 1990, so VIX is left out of the committed panel and noted below
 as a bonus risk series.)
@@ -42,26 +45,58 @@ bundled CSV — so option (a) is what actually works here.
 
 ## Per-asset deepest daily sources (ranked, verified)
 
-### 1. US equity — daily S&P 500 / SPX back to **1885** ✅ deepest
+### 1. US equity — daily S&P 500 / SPX back to **1885**, now **current** via splice ✅ deepest
+
+The STOCKS leg is a **splice** of two mirrors — a deep-but-static leg and a
+shallow-but-current leg — so the series is both ~140-years deep and runs to the
+present:
+
+**Deep leg (static, 1885 → 2024-02-26):**
 
 | Field | Value |
 |-------|-------|
-| Series | `STOCKS` (SPX daily close) |
 | URL | `https://raw.githubusercontent.com/ai357060/flower/master/Data/spx_d.csv` |
 | Daily span | **1885-01-01 → 2024-02-26** (true daily; ~300 obs/yr pre-1952 incl. Saturday sessions, ~252/yr after) |
 | Rows | 39,141 total; 1789–1884 rows are **monthly-spaced backfill** and are dropped (`_STOCKS_DAILY_START = 1885-01-01`) |
-| Format | Stooq export, Polish OHLCV header `Data,Otwarcie,Najwyzszy,Najnizszy,Zamkniecie,Wolumen`; close is col 5 |
-| Quality | No NaN / non-positive / duplicate closes in the daily region; price-only index (not total return) |
-| Confidence | High (loaded & spacing-profiled) |
+| Format | Stooq export, Polish OHLCV header `Data,Otwarcie,Najwyzszy,Najnizszy,Zamkniecie,Wolumen`; close is col 5 (`_stooq_spx_close`) |
+| Quality | No NaN / non-positive / duplicate closes in the daily region; price-only index (not total return); **STATIC** — last commit ends 2024-02-26 |
 
-Runner-up daily equity mirrors found but shallower: Yahoo `^GSPC` dumps in many
-ML repos (typically 2001/2005/2010+), `QuantSoftware/.../$SPX.csv` (2012+).
+**Current leg (extends to present):**
 
-Load snippet:
+| Field | Value |
+|-------|-------|
+| URL | `https://raw.githubusercontent.com/juanfp02/commodities_and_sovereigns/main/data/Indices.csv` |
+| Daily span | **2000-11-20 → 2025-12-18** (current; last "Dump" 2025-12) |
+| Format | **Semicolon-delimited** `Dates;EMB US Equity;SPX Index`; `Dates` = `DD.MM.YYYY`, European decimals (comma), SPX in col 3 located by header name (`_indices_spx_close`); Bloomberg `#N/A N/A` cells skipped |
+| Auto-update | **No GitHub Actions** — the maintainer manually re-dumps the whole repo (same repo as the `DGS10` bond yield, which is dumped alongside it; both currently 2025-12). Provenance is the same maintainer we already trust for BONDS, so the live `from_github()` refreshes whenever they push. |
+| Quality | Loaded; SPX column clean (last two rows duplicate the same close, harmless). The 2nd column `EMB US Equity` is `#N/A N/A` for the SPX-history range and is unused. |
+
+**Splice (`_splice_stocks`):** the deep prices are kept verbatim up to and
+including the **seam** (the deep leg's last day that also exists in the current
+leg, 2024-02-26); the current leg *after* the seam is multiplied by
+`deep[seam] / current[seam]` so the joined level is continuous. **Overlap
+agreement:** over the **5,851-day** overlap (2000-11-20 → 2024-02-26) the two SPX
+series agree to a **mean relative difference of ~0.0002%** (median 0.0%, max
+0.16% on the seam day; **100% of days within 0.5%**) — they are the same SPX, so
+the seam scale is ~1.0016 and the splice is invisible.
+
+Runner-up daily equity mirrors found but shallower/static: Yahoo `^GSPC` dumps in
+many ML repos (typically 2001/2005/2010+, all static), `vijinho/sp500` (1950+ but
+**archived/read-only** Jan-2025), `datasets/s-and-p-500` (current to 2026 but
+**monthly**, not daily — it remains our dividend-yield source for `STOCKS_TR`).
+The gold repo `unbalancedparentheses/forex-centuries` (deep + auto-updating) was
+checked for an equity series but carries **only** forex/gold/macro, no S&P/SPX.
+
+Load snippet (current leg):
 ```python
 import pandas as pd
-df = pd.read_csv("https://raw.githubusercontent.com/ai357060/flower/master/Data/spx_d.csv")
-spx = pd.to_numeric(df.iloc[:, 4]).set_axis(pd.to_datetime(df.iloc[:, 0]))  # daily SPX close
+df = pd.read_csv(
+    "https://raw.githubusercontent.com/juanfp02/commodities_and_sovereigns/main/data/Indices.csv",
+    sep=";", decimal=",",
+)
+spx = pd.to_numeric(df["SPX Index"], errors="coerce").set_axis(
+    pd.to_datetime(df["Dates"], format="%d.%m.%Y")
+).dropna()  # daily SPX close, 2000-11 → present
 ```
 
 ### 2. Long Treasuries / rates — daily 10Y yield back to **1962** ✅
@@ -123,38 +158,46 @@ multi-asset start from 1968 to 1990. Easy to add as a separate risk overlay.
 
 `examples/data/daily_panel_long.csv` — `Date` index + `STOCKS`, `STOCKS_TR`,
 `BONDS`, `GOLD` columns, **inner-joined** daily, dropna, **1968-04-01 →
-2024-02-26, 13,593 rows**. `BONDS` is rebased to 1.0 and `STOCKS_TR` to 100 on the
-first aligned row. The start is bound by gold (1968-04-01), the end by the STOCKS
-mirror (2024-02-26).
+2025-12-16, 14,035 rows**. `BONDS` is rebased to 1.0 and `STOCKS_TR` to 100 on the
+first aligned row. The start is bound by gold (1968-04-01); the end is now bound
+by the `DGS10` bond-yield mirror (2025-12-16) — gold runs to 2026-02-25 and the
+spliced STOCKS leg to 2025-12-18, so DGS10 stops first.
 
 ```python
 from riskbudget.data.providers import DailyPanelDataSource
 from datetime import date
 panel = DailyPanelDataSource.from_fixtures().get_prices(
-    ["STOCKS", "STOCKS_TR", "BONDS", "GOLD"], date(1968, 1, 1), date(2024, 12, 31)
+    ["STOCKS", "STOCKS_TR", "BONDS", "GOLD"], date(1968, 1, 1), date(2026, 12, 31)
 )
 ```
 
 The loader mirrors the Tiingo/Shiller/gold two-transport pattern:
 `from_fixtures()` (offline, reads the committed CSV) and `from_github()` (live,
-downloads the three sources above and re-assembles via `assemble_panel`). The
-live re-assembly was verified to reproduce the committed fixture (the fixture is
-regenerated from the four live sources via `assemble_panel`; 13,593-row index),
-so the offline tests exercise the same alignment/derivation that runs live.
-Registered as data source `daily_panel`.
+downloads the **five** sources above — deep + current STOCKS, DGS10, gold, Shiller
+dividends — splices STOCKS and re-assembles via `assemble_panel`). The committed
+fixture was **regenerated from the live sources** via `assemble_panel`
+(14,035-row index, 1968-04-01 → 2025-12-16), so the offline tests exercise the
+same alignment/derivation/splice that runs live. Registered as data source
+`daily_panel`.
 
 ## Caveats
 
 - `STOCKS` is a **price** index (no dividends) — for total-return equity deep
   history use the monthly Shiller `SP500_TR` provider; this daily series is for
   daily-frequency risk-budgeting demos.
+- `STOCKS` is **spliced** from two mirrors (deep static `ai357060/flower` 1885 +
+  current `juanfp02/.../Indices.csv` 2000→present). The two agree to ~0.0002%
+  mean over their 5,851-day overlap, so the seam is invisible — but the current
+  leg is **manually re-dumped** (no GitHub Actions), so live freshness depends on
+  the maintainer's pushes (same provenance as the `DGS10` bond leg).
 - `BONDS` is a **constant-duration (~8y) yield proxy**, not an actual bond-index
   total return (no convexity, roll-down, or on-the-run adjustment).
 - Sources are third-party GitHub mirrors of Stooq/FRED/LBMA dumps; they are
   pinned by URL but not cryptographically versioned. The committed fixture is the
   reproducible offline truth; `from_github()` is the convenience refresh path.
 - Honest bound: the deepest *aligned multi-asset daily* panel starts **1968**,
-  gated by daily gold (1968-04-01), and currently ends **2024-02-26**, gated by
-  the STOCKS mirror. Equity alone is daily to 1885 and the bond yield to 1962; the
-  gold and bond mirrors auto-update past 2024, so the binding end leg is now
-  equity rather than gold.
+  gated by daily gold (1968-04-01), and currently ends **2025-12-16**, now gated
+  by the `DGS10` bond-yield mirror. Equity alone is daily to 1885 (deep leg) and
+  current to ~2025-12 (spliced current leg), gold to 2026-02, and the bond yield
+  to 1962→2025-12; after the STOCKS splice the binding end leg is the bond yield,
+  not equity.

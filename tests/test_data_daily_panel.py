@@ -19,13 +19,14 @@ from riskbudget.core.interfaces import DataSource
 from riskbudget.core.types import PriceData
 from riskbudget.data.providers.daily import (
     DailyPanelDataSource,
+    _splice_stocks,
     assemble_panel,
     daily_panel_data_source,
 )
 from riskbudget.registry import REGISTRY
 
 START = date(1968, 1, 1)
-END = date(2024, 12, 31)
+END = date(2030, 12, 31)
 ASSETS = ["STOCKS", "STOCKS_TR", "BONDS", "GOLD"]
 
 
@@ -58,11 +59,12 @@ def test_available_assets(panel: DailyPanelDataSource) -> None:
 
 
 def test_panel_is_daily_and_deep(panel: DailyPanelDataSource) -> None:
-    prices = panel.get_prices(ASSETS, START, END)
+    prices = panel.get_prices(ASSETS, START, date(2030, 12, 31))
     # The aligned panel starts at the gold series (1968-04-01).
     assert prices.dates.min() <= pd.Timestamp(1968, 4, 2)
-    # The current auto-updating gold/stock mirrors push the panel past 2024-01.
-    assert prices.dates.max() >= pd.Timestamp(2024, 1, 1)
+    # Splicing the current SPX leg + the auto-updating gold/bond mirrors push the
+    # panel end well past the old 2024-02 STOCKS cap (now bound by DGS10).
+    assert prices.dates.max() >= pd.Timestamp(2025, 1, 1)
     # Daily cadence: a single calendar year holds far more than 12 rows.
     one_year = panel.get_prices(ASSETS, date(2000, 1, 1), date(2000, 12, 31))
     assert one_year.shape[0] > 200
@@ -200,6 +202,15 @@ _STOCKS_RAW = (
     "1968-01-02,96,96,95,100,0\n"
     "1968-01-03,100,101,99,110,0\n"
 )
+# Current SPX leg: ``juanfp02/.../data/Indices.csv`` -- semicolon-delimited,
+# ``Dates`` as DD.MM.YYYY, European decimals, SPX in the 3rd column. It overlaps
+# the deep leg on its last day (1968-01-03) then extends it (1968-01-04).
+_STOCKS_CURRENT_RAW = (
+    "Dates;EMB US Equity;SPX Index\n"
+    "02.01.1968;#N/A N/A;100,0\n"
+    "03.01.1968;#N/A N/A;110,0\n"  # overlap day -> defines the splice seam/scale
+    "04.01.1968;#N/A N/A;120,0\n"  # extends the deep leg
+)
 _DGS10_RAW = "observation_date,DGS10\n1968-01-02,6.0\n1968-01-03,5.0\n"
 # forex-centuries LBMA mirror: ``date,gold_pm_usd,gold_pm_gbp,gold_pm_eur``;
 # only the 2nd column (USD) is consumed by ``_parse_two_col``.
@@ -237,6 +248,56 @@ def test_assemble_panel_aligns_and_derives() -> None:
     tr_growth = frame["STOCKS_TR"].iloc[-1] / frame["STOCKS_TR"].iloc[0]
     px_growth = frame["STOCKS"].iloc[-1] / frame["STOCKS"].iloc[0]
     assert tr_growth > px_growth
+
+
+def test_assemble_panel_splices_current_stocks_leg() -> None:
+    # With the current SPX leg supplied, the deep leg is kept verbatim up to the
+    # overlap seam (1968-01-03) and the current leg extends it (1968-01-04),
+    # scaled so the level is continuous at the seam.
+    dgs10 = "observation_date,DGS10\n1968-01-02,6.0\n1968-01-03,5.0\n1968-01-04,5.5\n"
+    gold = (
+        "date,gold_pm_usd,gold_pm_gbp,gold_pm_eur\n"
+        "1968-01-02,35.0,15.0,0\n1968-01-03,36.0,15.2,0\n1968-01-04,37.0,15.4,0\n"
+    )
+    frame = assemble_panel(_STOCKS_RAW, dgs10, gold, _SHILLER_RAW, _STOCKS_CURRENT_RAW)
+    # The current leg extends the panel a day past the deep leg's end.
+    assert list(frame.index) == [
+        pd.Timestamp(1968, 1, 2),
+        pd.Timestamp(1968, 1, 3),
+        pd.Timestamp(1968, 1, 4),
+    ]
+    # Deep prices are kept verbatim up to/including the seam (1968-01-03).
+    assert frame["STOCKS"].iloc[0] == pytest.approx(100.0)
+    assert frame["STOCKS"].iloc[1] == pytest.approx(110.0)
+    # Seam scale = deep[seam]/current[seam] = 110/110 = 1.0 here, so the appended
+    # day is the raw current value 120 scaled by 1.0.
+    assert frame["STOCKS"].iloc[2] == pytest.approx(120.0)
+    # Strictly positive daily price level throughout.
+    assert (frame["STOCKS"] > 0).all()
+
+
+def test_splice_stocks_scales_current_leg_to_seam() -> None:
+    # Deep leg ends at 200 on the shared seam date where current reads 100, so the
+    # current leg must be scaled by 200/100 = 2 after the seam to stay continuous.
+    deep = pd.Series(
+        [180.0, 200.0],
+        index=pd.DatetimeIndex([pd.Timestamp(2024, 2, 23), pd.Timestamp(2024, 2, 26)]),
+    )
+    current = pd.Series(
+        [100.0, 110.0],
+        index=pd.DatetimeIndex([pd.Timestamp(2024, 2, 26), pd.Timestamp(2024, 2, 27)]),
+    )
+    spliced = _splice_stocks(deep, current)
+    assert list(spliced.index) == [
+        pd.Timestamp(2024, 2, 23),
+        pd.Timestamp(2024, 2, 26),
+        pd.Timestamp(2024, 2, 27),
+    ]
+    # Deep verbatim up to the seam; current scaled by 2.0 afterward.
+    assert spliced.loc[pd.Timestamp(2024, 2, 23)] == pytest.approx(180.0)
+    assert spliced.loc[pd.Timestamp(2024, 2, 26)] == pytest.approx(200.0)
+    assert spliced.loc[pd.Timestamp(2024, 2, 27)] == pytest.approx(220.0)
+    assert (spliced > 0).all()
 
 
 def test_assemble_panel_skips_blank_and_dot_yields() -> None:
