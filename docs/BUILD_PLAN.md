@@ -1,11 +1,21 @@
 # Portfolio Risk Budgeting System — Build Plan
 
-> Status: **In build.** Wave 0 (foundation), Wave 0.5 (core extension), and Wave 1
-> (data, simulation, risk/return models incl. Black-Litterman, optimizers,
-> diversification/factor-RB/HRP) are implemented, integrated, and green (428 passed,
-> 6 optional cross-checks skipped offline; ruff + mypy clean). Wave 2 (backtester,
-> analytics, dynamic allocation) and Wave 3 (API/dashboard, integration) are next.
-> This document is the single source of truth that every build agent reads first.
+> Status: **Built and operational** (all waves complete; 707 passed / 6 optional
+> cross-check skips; ruff + mypy clean). The full pipeline runs end-to-end:
+> data (synthetic, CSV, Tiingo, Shiller, gold, and a live 5-source daily deep-history
+> panel 1968→present) → risk/return models (incl. Black-Litterman) → optimizers
+> (ERC/risk-budget via CCD/cvxpy/scipy, GMV, MSR, Efficient-MSR, ensemble,
+> conditional) → diversification (ENB, min-torsion, MDP, max-ENB, HRP) →
+> walk-forward backtester (no look-ahead, costs) with a **volatility-targeting
+> overlay** (`target_volatility`, 252-day daily vol) → analytics (Cornish-Fisher
+> VaR/CVaR, drawdown, attribution, summary_stats) → reporting (single-strategy +
+> multi-strategy comparison HTML) → API / dashboard / CLI, all driven by one
+> `StrategySpec` + registry. Post-build additions beyond the original waves:
+> vol targeting, comparison reports, deep-history + live-updating data providers,
+> dividend-adjusted total-return S&P (validated against Shiller's ie_data.xls,
+> median dev 0.02%). Examples: `examples/*.py`; sources: `docs/daily-data-sources.md`.
+> This document remains the architectural source of truth; §1–§12 describe the
+> as-built design.
 
 ## 1. Purpose
 

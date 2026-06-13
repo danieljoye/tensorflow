@@ -21,21 +21,35 @@ from riskbudget.core.errors import BacktestError, ConfigurationError
 from riskbudget.core.types import BacktestResult, Portfolio, PriceData
 from riskbudget.spec import StrategySpec
 
-# A generous default synthetic window when a spec leaves dates unset: ~6 years of
-# business days, enough history for any lookback in the test/example suite.
-_DEFAULT_START = date(2015, 1, 1)
-_DEFAULT_END = date(2021, 1, 1)
+# Default windows when a spec leaves start/end unset.
+#
+# - The SYNTHETIC source *generates* data over the requested window, so it needs a
+#   bounded default: ~6 years of business days, enough for any lookback in the
+#   test/example suite.
+# - Every other source serves *recorded* history, where the natural default is the
+#   source's FULL available range — silently truncating a 1968->present panel to
+#   2015-2021 would be surprising. A wide sentinel window achieves "everything"
+#   without the caller needing to know the source's actual span.
+_DEFAULT_SYNTHETIC_START = date(2015, 1, 1)
+_DEFAULT_SYNTHETIC_END = date(2021, 1, 1)
+_FULL_RANGE_START = date(1800, 1, 1)
+_FULL_RANGE_END = date(2200, 1, 1)
 
 
 def fetch_prices(spec: StrategySpec) -> PriceData:
     """Resolve ``spec``'s data source into a :class:`PriceData` panel.
 
-    Uses ``spec.start`` / ``spec.end`` when set; otherwise falls back to a default
-    multi-year window (the synthetic source is deterministic given the seed).
+    Uses ``spec.start`` / ``spec.end`` when set. Otherwise the synthetic source
+    falls back to a deterministic ~6-year window, and every recorded-history
+    source returns its **full available range**.
     """
     source = spec.build_data_source()
-    start = spec.start if spec.start is not None else _DEFAULT_START
-    end = spec.end if spec.end is not None else _DEFAULT_END
+    if spec.data_source.name == "synthetic":
+        default_start, default_end = _DEFAULT_SYNTHETIC_START, _DEFAULT_SYNTHETIC_END
+    else:
+        default_start, default_end = _FULL_RANGE_START, _FULL_RANGE_END
+    start = spec.start if spec.start is not None else default_start
+    end = spec.end if spec.end is not None else default_end
     try:
         prices = source.get_prices(list(spec.assets), start, end)
     except ConfigurationError:
