@@ -42,8 +42,10 @@ def compute_turnover(
         engine supplies the drifted weights), so the trade is
         ``new_weights − prev_weights``.
     one_way:
-        If ``True`` (default) return ``½ · Σ |Δw|`` — the one-sided traded
-        notional, the convention used for proportional cost accounting. If
+        If ``True`` (default) return the one-sided traded notional
+        ``max(Σ buys, Σ sells)``. For gross-preserving rebalances this equals the
+        textbook ``½ · Σ |Δw|``; when gross exposure changes (leverage up/down,
+        initial cash deployment) it correctly counts the larger traded leg. If
         ``False`` return the gross ``Σ |Δw|`` (two-way) figure.
 
     Returns
@@ -64,8 +66,18 @@ def compute_turnover(
         )
     if not (np.isfinite(prev).all() and np.isfinite(new).all()):
         raise BacktestError("Turnover inputs contain non-finite weights.")
-    gross = float(np.abs(new - prev).sum())
-    return 0.5 * gross if one_way else gross
+    delta = new - prev
+    gross = float(np.abs(delta).sum())
+    if not one_way:
+        return gross
+    # One-way turnover = max(buys, sells): the one-side traded notional. When the
+    # rebalance preserves gross exposure (buys == sells) this equals the textbook
+    # 0.5 * sum(|dw|); when leverage changes (e.g. a vol-target re-lever from 1x to
+    # 2x buys 1.0 NAV against zero sells) the 0.5 convention would undercount the
+    # traded notional by half, so we charge the larger leg instead.
+    buys = float(np.clip(delta, 0.0, None).sum())
+    sells = float(np.clip(-delta, 0.0, None).sum())
+    return max(buys, sells)
 
 
 @runtime_checkable

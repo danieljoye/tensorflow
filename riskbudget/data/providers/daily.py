@@ -383,8 +383,10 @@ def _stocks_tr_index(stocks: pd.Series, div_yield: pd.Series) -> pd.Series:
     The result is rebased to 100 on the first aligned date.
     """
     daily_div = div_yield.reindex(stocks.index, method="ffill") / 252.0
-    r_t = stocks.pct_change() + daily_div
-    tr = (1.0 + r_t.fillna(0.0)).cumprod()
+    # Fill each component separately: a missing dividend yield (dates before the
+    # first Shiller observation) must not zero out the PRICE return for that day.
+    r_t = stocks.pct_change().fillna(0.0) + daily_div.fillna(0.0)
+    tr = (1.0 + r_t).cumprod()
     tr = tr / float(tr.iloc[0]) * 100.0
     return tr.rename("STOCKS_TR")
 

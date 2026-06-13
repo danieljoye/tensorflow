@@ -296,6 +296,26 @@ class StrategySpec(BaseModel):
                 f"Could not build data source {self.data_source.name!r}: {exc}"
             ) from exc
 
+    def _propagate_periods_per_year(self, factory: Any, params: dict[str, Any]) -> dict[str, Any]:
+        """Inject the run's ``periods_per_year`` into ``params`` when the factory
+        accepts it and the user hasn't pinned it explicitly.
+
+        Keeps every estimator annualized to the *data* frequency rather than a
+        hardcoded 252 — covariance and expected returns must use the same factor
+        or μ and Σ are on different scales.
+        """
+        import inspect
+
+        if "periods_per_year" in params:
+            return params
+        try:
+            sig = inspect.signature(factory)
+        except (TypeError, ValueError):  # pragma: no cover - builtins
+            return params
+        if "periods_per_year" in sig.parameters:
+            params = {**params, "periods_per_year": self.periods_per_year}
+        return params
+
     def build_risk_model(self) -> Any:
         """Instantiate the configured :class:`RiskModel`.
 
@@ -303,17 +323,8 @@ class StrategySpec(BaseModel):
         the covariance is annualized to the *data* frequency, not a hardcoded 252),
         unless the user pinned it explicitly in ``risk_model_params``.
         """
-        import inspect
-
         factory = self._registry.risk_model(self.risk_model)
-        params = dict(self.risk_model_params)
-        if "periods_per_year" not in params:
-            try:
-                sig = inspect.signature(factory)
-            except (TypeError, ValueError):  # pragma: no cover - builtins
-                sig = None
-            if sig is not None and "periods_per_year" in sig.parameters:
-                params["periods_per_year"] = self.periods_per_year
+        params = self._propagate_periods_per_year(factory, dict(self.risk_model_params))
         try:
             return factory(**params)
         except Exception as exc:
@@ -322,13 +333,18 @@ class StrategySpec(BaseModel):
             ) from exc
 
     def build_mean_model(self) -> Any | None:
-        """Instantiate the configured :class:`MeanModel`, or ``None`` if unset."""
+        """Instantiate the configured :class:`MeanModel`, or ``None`` if unset.
+
+        Propagates the run's ``periods_per_year`` exactly like
+        :meth:`build_risk_model` — μ and Σ must annualize by the same factor.
+        """
         if self.mean_model is None:
             return None
         factory = self._registry.mean_model(self.mean_model)
         params = dict(self.mean_model_params)
         if self.mean_model == "black_litterman":
             params = {**self._black_litterman_kwargs(), **params}
+        params = self._propagate_periods_per_year(factory, params)
         try:
             return factory(**params)
         except ConfigurationError:

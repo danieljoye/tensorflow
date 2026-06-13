@@ -400,15 +400,23 @@ class WalkForwardBacktester:
     def _drift(weights: np.ndarray, period_return: np.ndarray) -> np.ndarray:
         """Drift weights by one period of (simple) realized returns.
 
-        After a period, an asset's value grows by ``(1 + r)``; renormalizing to the
-        new portfolio value gives the drifted weights. If the book is empty (all
-        cash) it stays empty.
+        After a period each asset position grows by ``(1 + r)`` while the cash
+        residual ``1 - Σw`` is flat (rf = 0), so the portfolio grows by
+        ``1 + w·r`` and the drifted weights are ``w(1+r) / (1 + w·r)``.
+
+        Dividing by the *portfolio growth* — not the weight sum — preserves the
+        book's gross exposure: a levered (``Σw > 1``) or partly-cash (``Σw < 1``)
+        book stays levered / partly-cash between rebalances rather than being
+        silently renormalized to fully-invested. For a fully-invested book
+        (``Σw == 1``) this reduces exactly to ``grown / grown.sum()``.
         """
         grown = weights * (1.0 + period_return)
-        total = float(grown.sum())
-        if abs(total) < 1e-15:
+        portfolio_growth = 1.0 + float(weights @ period_return)
+        if abs(portfolio_growth) < 1e-15:
+            # the book (incl. cash) was wiped out; weights are no longer
+            # meaningful — keep the previous ones rather than divide by ~0.
             return weights.copy()
-        return np.asarray(grown / total, dtype=float)
+        return np.asarray(grown / portfolio_growth, dtype=float)
 
     @staticmethod
     def _build_equity_curve(port_returns: np.ndarray, dates: pd.Index) -> pd.Series:

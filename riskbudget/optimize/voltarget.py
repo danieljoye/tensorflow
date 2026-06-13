@@ -7,7 +7,7 @@ rebalance from the same trailing-window covariance the inner method used, so it 
 strictly point-in-time (no look-ahead):
 
     sigma_annual = sqrt(wᵀ Σ w)              # Σ is the (annualized) window covariance
-    leverage     = clip(target / sigma_annual, 0, max_leverage)
+    leverage     = min(target / sigma_annual, max_leverage)   # 0 (all cash) if sigma == 0
     w_scaled     = leverage · w
 
 Σ is the covariance the risk model produced for the window, annualized to the run
