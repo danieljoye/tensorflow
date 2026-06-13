@@ -36,15 +36,22 @@ Sources (all verified fetchable via ``raw.githubusercontent.com`` in this sandbo
     refreshes the whole repo periodically alongside ``DGS10.csv``.
 
   The two legs are spliced (:func:`_splice_stocks`) at the deep leg's last day:
-  the deep prices are kept verbatim up to and including the seam, and the current
-  leg *after* the seam is multiplied by ``deep[seam] / current[seam]`` so the
-  level is continuous. Over their 5,851-day overlap (2000-11-20 -> 2024-02-26)
-  the two SPX series agree to a mean relative difference of ~0.0002% (100% of
-  days within 0.5%; both are the same SPX, only timestamp/rounding differs), so
-  the splice scale factor is ~1.0016 and the seam is invisible.
+  the deep prices are kept verbatim **in full**, and the current leg is used only
+  where it *extends* the deep leg (dates after its end), multiplied by
+  ``deep[seam] / current[seam]`` (seam = last common date) so the level is
+  continuous; if the current leg ever regresses to end *before* the deep leg, the
+  deep tail is preserved rather than truncated. The splice sanity-checks the seam
+  (scale within ±5%, last-20-common-days agreement within 2% mean abs) and raises
+  ``DataError`` on upstream format/content changes. Over their 5,851-day overlap
+  (2000-11-20 -> 2024-02-26) the two SPX series agree to a mean relative
+  difference of ~0.0002% (100% of days within 0.5%; both are the same SPX, only
+  timestamp/rounding differs), so the splice scale factor is ~1.0016 and the seam
+  is invisible.
 - ``STOCKS_TR`` — a **dividend-adjusted total-return** index for the S&P price
   leg. The annualized monthly dividend yield ``y = Dividend / SP500`` (from the
-  Shiller datahub mirror) is forward-filled onto the daily index and spread
+  Shiller datahub mirror) is lagged one month (so days in month ``M`` carry
+  month ``M-1``'s knowable yield — no intra-month look-ahead; see
+  :func:`_stocks_tr_index`), forward-filled onto the daily index and spread
   across the trading year (``daily_div = y / 252``); the daily total return is
   the price change plus that carry, ``r_t = STOCKS.pct_change() + daily_div``,
   cumulated to a level series rebased to 100 on the first aligned date.
@@ -64,7 +71,9 @@ Sources (all verified fetchable via ``raw.githubusercontent.com`` in this sandbo
   repo refreshes ``data/sources/lbma/lbma_gold_daily.csv`` via a weekly GitHub
   Actions cron (Mondays 06:00 UTC), so the live transport stays fresh through the
   present. The file is ``date,gold_pm_usd,gold_pm_gbp,gold_pm_eur``; only the USD
-  column (the 2nd column, picked up by :func:`_parse_two_col`) is used. This
+  column is used (located by the ``gold_pm_usd`` header name via
+  :func:`_parse_two_col`, falling back to column 2 when the header is absent, so
+  an upstream column re-order cannot swap currencies). This
   replaces the previously-used static ``UtaHagen/PortfolioProject`` mirror, which
   ended 2023-12-28; over their 14k-day overlap the two series agree to a mean
   relative difference of ~0.4% (AM/PM-fix and spot/fix timing account for the few
@@ -193,24 +202,37 @@ def _parse_fixture(text: str) -> pd.DataFrame:
     return frame.loc[:, list(_ASSETS)]
 
 
-def _parse_two_col(text: str, value_name: str) -> pd.Series:
+def _parse_two_col(text: str, value_name: str, *, prefer_columns: Sequence[str] = ()) -> pd.Series:
     """Parse a generic two-column ``date,value`` daily CSV into a Series.
 
     The first column is always treated as the date; the *second* column is the
     value (so this tolerates the different header names the three mirrors use,
     e.g. ``Close``/``DGS10``/``Gold Price``). Rows whose value is blank or the
     FRED ``.`` placeholder are skipped.
+
+    ``prefer_columns`` lets a caller pin the value column by **header name**
+    instead of trusting column position: the first listed name found in the
+    header row wins (case-insensitive, whitespace-stripped). When none match,
+    the generic second-column behavior applies, so existing callers are
+    unaffected. The gold payload passes ``("gold_pm_usd",)`` so an upstream
+    column re-order cannot silently swap USD for GBP/EUR.
     """
     reader = csv.reader(StringIO(text))
     rows = list(reader)
     if not rows:
         raise DataError(f"{value_name} CSV is empty (no header row).")
+    header = [cell.strip().lower() for cell in rows[0]]
+    value_col = 1
+    for name in prefer_columns:
+        if name.strip().lower() in header:
+            value_col = header.index(name.strip().lower())
+            break
     dates: list[pd.Timestamp] = []
     values: list[float] = []
     for row in rows[1:]:
-        if len(row) < 2 or not row[0]:
+        if len(row) <= value_col or not row[0]:
             continue
-        raw = row[1].strip()
+        raw = row[value_col].strip()
         if raw in ("", "."):
             continue
         try:
@@ -255,14 +277,36 @@ def _stooq_spx_close(text: str) -> pd.Series:
     return series[series.index >= _STOCKS_DAILY_START]
 
 
+def _parse_flexible_decimal(raw: str) -> float:
+    """Parse a numeric string whose decimal convention is detected per value.
+
+    - Contains **both** ``.`` and ``,`` → European convention (``.`` thousands
+      separator, ``,`` decimal comma), e.g. ``"6.800,26"`` → ``6800.26``.
+    - Contains **only** ``,`` → decimal comma, e.g. ``"6800,26"`` → ``6800.26``.
+    - Contains **only** ``.`` (or neither) → plain US decimal, e.g. ``"6800.26"``.
+
+    This avoids blindly stripping ``.`` (which would corrupt a US-format dump if
+    the upstream file's convention changes). Raises ``ValueError`` on
+    unparseable input, like :func:`float`.
+    """
+    if "," in raw and "." in raw:
+        return float(raw.replace(".", "").replace(",", "."))
+    if "," in raw:
+        return float(raw.replace(",", "."))
+    return float(raw)
+
+
 def _indices_spx_close(text: str) -> pd.Series:
     """Extract the daily SPX close from ``juanfp02/.../data/Indices.csv``.
 
     The file is **semicolon-delimited** with a ``Dates;EMB US Equity;SPX Index``
-    header. Dates are ``DD.MM.YYYY``; numbers use the European convention
-    (``.`` thousands separator, ``,`` decimal comma, e.g. ``6 800,26`` is written
-    ``6800,26``). Bloomberg ``#N/A N/A`` / blank cells are skipped. The SPX column
-    is located by header name so a column re-order upstream is tolerated.
+    header. Dates are ``DD.MM.YYYY``; numbers currently use the European
+    convention (``,`` decimal comma, ``.`` thousands separator) but the decimal
+    convention is detected **per value** via :func:`_parse_flexible_decimal` so
+    an upstream switch to US formatting is parsed correctly rather than
+    silently corrupted. Bloomberg ``#N/A N/A`` / blank cells are skipped. The
+    SPX column is located by header name so a column re-order upstream is
+    tolerated.
     """
     reader = csv.reader(StringIO(text), delimiter=";")
     rows = list(reader)
@@ -283,7 +327,7 @@ def _indices_spx_close(text: str) -> pd.Series:
             continue
         try:
             ts = pd.Timestamp(pd.to_datetime(row[0], format="%d.%m.%Y")).normalize()
-            close = float(raw.replace(".", "").replace(",", "."))
+            close = _parse_flexible_decimal(raw)
         except (TypeError, ValueError):
             continue
         if close <= 0.0:
@@ -296,17 +340,36 @@ def _indices_spx_close(text: str) -> pd.Series:
     return series[~series.index.duplicated(keep="last")].sort_index()
 
 
+# Sanity limits for the STOCKS splice (both legs are the same SPX index, so the
+# seam scale should be ~1.0 and the overlap window should agree tightly; live
+# observed values are scale ~1.0016 with ~0.0002% mean relative difference).
+_SPLICE_SCALE_BOUNDS = (0.95, 1.05)
+_SPLICE_OVERLAP_WINDOW = 20  # last N common days checked for agreement
+_SPLICE_OVERLAP_TOL = 0.02  # max mean absolute relative difference
+
+
 def _splice_stocks(deep: pd.Series, current: pd.Series) -> pd.Series:
     """Splice a deep-but-static SPX leg onto a shallow-but-current one.
 
-    The deep prices are kept verbatim up to and including the **seam** (the deep
-    leg's last date that also exists in ``current``); the current leg *after* the
-    seam is multiplied by ``deep[seam] / current[seam]`` so the joined level is
-    continuous. If the two legs do not overlap at all, the current leg is rebased
-    onto the deep leg's final level instead (best effort, no seam scale check).
+    The deep prices are kept **verbatim in full** (including any dates past the
+    last common date); the current leg is used only where it *extends* the deep
+    leg — dates strictly after the deep leg's end — multiplied by
+    ``deep[seam] / current[seam]`` (seam = the last common date) so the joined
+    level is continuous. In particular, if the current leg ends *before* the
+    deep leg (an upstream regression), the deep leg's tail is preserved rather
+    than truncated. If the two legs do not overlap at all, the current leg is
+    rebased onto the deep leg's final level instead (best effort, no seam
+    sanity check possible).
+
+    Sanity checks (live-path protection against upstream format/content
+    changes): when the legs overlap, a :class:`DataError` is raised unless the
+    seam scale lies within :data:`_SPLICE_SCALE_BOUNDS` **and** the last
+    :data:`_SPLICE_OVERLAP_WINDOW` common days agree (after scaling) to within
+    :data:`_SPLICE_OVERLAP_TOL` mean absolute relative difference — both legs
+    are the same SPX, so any larger disagreement means a corrupted leg.
 
     The result is a strictly-positive daily price level, ascending and de-duped,
-    spanning ``min(deep.start, current.start)`` to ``current.end``.
+    spanning ``min(deep.start, current.start)`` to ``max(deep.end, current.end)``.
     """
     if deep.empty:
         out = current.copy()
@@ -320,11 +383,30 @@ def _splice_stocks(deep: pd.Series, current: pd.Series) -> pd.Series:
     if len(overlap) > 0:
         seam = overlap.max()
         scale = float(deep.loc[seam]) / float(current.loc[seam])
+        lo, hi = _SPLICE_SCALE_BOUNDS
+        if not (lo <= scale <= hi):
+            raise DataError(
+                f"STOCKS splice seam scale {scale:.4f} outside [{lo}, {hi}]: the deep "
+                f"({float(deep.loc[seam]):.2f}) and current ({float(current.loc[seam]):.2f}) "
+                f"SPX legs disagree at the seam ({seam.date()}) — likely an upstream "
+                "format or content change."
+            )
+        window = overlap.sort_values()[-_SPLICE_OVERLAP_WINDOW:]
+        rel = (deep.loc[window] / (current.loc[window] * scale) - 1.0).abs()
+        mean_abs = float(rel.mean())
+        if mean_abs > _SPLICE_OVERLAP_TOL:
+            raise DataError(
+                f"STOCKS splice overlap check failed: the last {len(window)} common days "
+                f"of the deep and current SPX legs differ by {mean_abs:.2%} mean absolute "
+                f"relative difference (tolerance {_SPLICE_OVERLAP_TOL:.0%}) — likely an "
+                "upstream format or content change."
+            )
     else:
-        seam = deep.index.max()
         scale = float(deep.iloc[-1]) / float(current.iloc[0])
-    tail = current[current.index > seam] * scale
-    spliced: pd.Series = pd.concat([deep[deep.index <= seam], tail])
+    # Keep the deep leg in full; use the current leg only where it EXTENDS it.
+    deep_end = deep.index.max()
+    tail = current[current.index > deep_end] * scale
+    spliced: pd.Series = pd.concat([deep, tail])
     spliced = spliced[~spliced.index.duplicated(keep="last")].sort_index()
     spliced.name = "STOCKS"
     return spliced
@@ -381,8 +463,22 @@ def _stocks_tr_index(stocks: pd.Series, div_yield: pd.Series) -> pd.Series:
     daily ``stocks`` index and spread across the trading year, then added to the
     daily price change and cumulated. See the module docstring for the formula.
     The result is rebased to 100 on the first aligned date.
+
+    Look-ahead caveat
+    -----------------
+    Applying the Shiller month-``M`` yield to days *within* month ``M`` would
+    embed a mild **intra-month look-ahead** (the month's dividend/price are not
+    knowable until the month ends). To stay strictly point-in-time, the yield
+    series is lagged by one observation (one month, since it is
+    monthly-stamped) before the forward-fill, so days in month ``M`` carry
+    month ``M-1``'s yield. For a smooth ``y/252`` carry spread this changes the
+    cumulative total return only at the basis-point level (month-over-month
+    yield changes are tiny and largely telescope out), so STOCKS_TR is
+    economically unchanged.
     """
-    daily_div = div_yield.reindex(stocks.index, method="ffill") / 252.0
+    # shift(1) on the monthly-stamped series shifts by one OBSERVATION = one
+    # month: month-M's stamp now carries month M-1's (knowable) yield.
+    daily_div = div_yield.shift(1).reindex(stocks.index, method="ffill") / 252.0
     # Fill each component separately: a missing dividend yield (dates before the
     # first Shiller observation) must not zero out the PRICE return for that day.
     r_t = stocks.pct_change().fillna(0.0) + daily_div.fillna(0.0)
@@ -431,7 +527,9 @@ def assemble_panel(
     if stocks_current_text is not None:
         stocks = _splice_stocks(stocks, _indices_spx_close(stocks_current_text))
     bonds = _bond_tr_from_yield(_parse_two_col(dgs10_text, "DGS10"))
-    gold = _parse_two_col(gold_text, "GOLD")
+    # Pin the LBMA USD column by header name (falls back to column 1 when the
+    # header is absent) so an upstream column re-order cannot swap currencies.
+    gold = _parse_two_col(gold_text, "GOLD", prefer_columns=("gold_pm_usd",))
 
     panel = pd.concat([stocks, bonds, gold], axis=1, join="inner").dropna(how="any")
     if panel.empty:

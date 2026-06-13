@@ -18,6 +18,26 @@ When ``leverage > 1`` the book is levered (the residual is implicitly financed a
 the risk-free rate); when ``leverage < 1`` the residual sits in cash. Because the
 inner method is long-only, scaling preserves sign — no shorting is introduced.
 
+Constraint precedence (read this before combining with ``Constraints``)
+-----------------------------------------------------------------------
+The overlay **intentionally re-levers** the inner solution, so the final book
+does **not** honor ``Constraints.leverage``: the inner constructor solves at its
+constrained gross (typically 1.0), then the overlay rescales by ``k``. The final
+gross exposure is bounded by the overlay's own ``max_leverage``
+(``StrategySpec.target_vol_max_leverage``), **not** by ``constraints.leverage``.
+Setting both a volatility target and an explicit non-default
+``constraints.leverage`` is therefore a configuration conflict —
+:class:`riskbudget.spec.StrategySpec` rejects it with ``ConfigurationError``.
+
+Two inner constraints *are* reconciled after scaling:
+
+- ``constraints.max_weight`` — if any scaled weight would exceed it, ``k`` is
+  reduced to ``max_weight / max(inner weight)`` so the per-asset cap holds on the
+  **final** (scaled) weights. The realized ex-ante vol then lands *below* the
+  target (the cap binds).
+- relative structure — group caps and the budget shape are expressed relative to
+  the gross and are preserved by the uniform rescale.
+
 BUILD_PLAN §2 (risk budgeting), §3.1 (conventions). Standard risk-parity practice
 applies exactly this overlay to bring a low-vol budgeted book up to a usable risk
 level.
@@ -93,6 +113,17 @@ class VolatilityTargetConstructor:
             return 0.0
         return min(self.target_volatility / sigma_annual, self.max_leverage)
 
+    def set_prev_weights(self, prev_weights: object | None) -> None:
+        """Forward the backtester's drifted pre-rebalance book to the inner method.
+
+        Optional duck-typed seam (see ``WalkForwardBacktester._sync_prev_weights``):
+        delegates to ``inner.set_prev_weights`` when the inner optimizer supports a
+        turnover constraint; a no-op otherwise.
+        """
+        setter = getattr(self.inner, "set_prev_weights", None)
+        if callable(setter):
+            setter(prev_weights)
+
     def construct(
         self,
         cov: np.ndarray,
@@ -101,6 +132,19 @@ class VolatilityTargetConstructor:
         budget: RiskBudget | None = None,
         constraints: Constraints,
     ) -> Portfolio:
+        """Solve the inner book, then scale it to the target volatility.
+
+        The scale ``k`` is capped at :attr:`max_leverage` and — when
+        ``constraints.max_weight`` is set — further reduced to
+        ``max_weight / max(inner weight)`` so no *scaled* weight breaches the
+        per-asset cap (the realized ex-ante vol then lands below the target).
+        See the module docstring for the full constraint-precedence rules.
+        """
         portfolio = self._inner_portfolio(cov, mu, budget, constraints)
         k = self.leverage_for(portfolio, cov)
+        max_weight = getattr(constraints, "max_weight", None)
+        if max_weight is not None and portfolio.weights:
+            largest = max(abs(w) for w in portfolio.weights.values())
+            if largest > 0.0 and k * largest > float(max_weight):
+                k = float(max_weight) / largest
         return Portfolio({asset: w * k for asset, w in portfolio.weights.items()})

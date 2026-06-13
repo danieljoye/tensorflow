@@ -21,6 +21,8 @@ Source: pyrb (Richard–Roncalli 2019); Spinu (2013); BUILD_PLAN §3.1, §11, §
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import numpy as np
 
 from riskbudget.core.errors import OptimizationError
@@ -111,6 +113,17 @@ class RiskBudgetOptimizer:
     """
 
     def __init__(self, prev_weights: dict[str, float] | None = None) -> None:
+        self._prev_weights = dict(prev_weights) if prev_weights else None
+
+    def set_prev_weights(self, prev_weights: Mapping[str, float] | None) -> None:
+        """Update the previous-period weights used by the turnover constraint.
+
+        This is the optional duck-typed seam the walk-forward backtester uses to
+        thread the *drifted* pre-rebalance book into each solve when
+        ``Constraints.max_turnover`` is set. ``None`` clears the state (the
+        engine passes ``None`` at the first rebalance so the initial deployment
+        from cash is not made infeasible by a small turnover cap).
+        """
         self._prev_weights = dict(prev_weights) if prev_weights else None
 
     def solve(

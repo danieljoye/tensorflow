@@ -58,27 +58,54 @@ def _overlay_figure(frame: pd.DataFrame, title: str, ytitle: str, *, log_y: bool
 
 
 def _composition_figure(results: Mapping[str, BacktestResult]) -> Any:
-    """Stacked-bar of each strategy's *average* portfolio weights (composition)."""
+    """Stacked-bar of each strategy's *average* composition mix (% of gross).
+
+    Each rebalance date's weights are normalized by that date's **gross
+    exposure** (sum of absolute weights) before averaging, so the bars show the
+    true allocation mix summing to 100% regardless of leverage. Leverage is
+    reported separately: each bar carries a per-strategy annotation of the mean
+    gross exposure (e.g. ``1.8x gross``). Missing assets render as 0%.
+    """
     go = _require_plotly()
-    comp = pd.DataFrame(
-        {name: res.weights.mean() for name, res in results.items() if res.weights is not None}
-    ).T  # rows = strategies, cols = assets
+    comp_cols: dict[str, pd.Series] = {}
+    gross_by_strategy: dict[str, float] = {}
+    for name, res in results.items():
+        if res.weights is None:
+            continue
+        w = res.weights.astype(float)
+        gross = w.abs().sum(axis=1)
+        # Composition mix: normalize each rebalance row by its gross exposure
+        # (rows with zero gross — an all-cash book — contribute nothing).
+        mix = w.div(gross.where(gross > 0.0), axis=0)
+        comp_cols[name] = mix.mean()
+        gross_by_strategy[name] = float(gross.mean())
+    comp = pd.DataFrame(comp_cols).T.fillna(0.0)  # rows = strategies, cols = assets
     fig = go.Figure()
     for asset in comp.columns:
+        values = comp[asset].fillna(0.0)
         fig.add_trace(
             go.Bar(
                 x=comp.index.astype(str),
-                y=comp[asset].to_numpy(),
+                y=values.to_numpy(),
                 name=str(asset),
-                text=[f"{v:.0%}" for v in comp[asset]],
+                text=[f"{v:.0%}" for v in values],
                 textposition="inside",
             )
         )
+    # Mean gross leverage per strategy, annotated above each bar.
+    for name in comp.index:
+        fig.add_annotation(
+            x=str(name),
+            y=1.0,
+            yshift=14,
+            text=f"{gross_by_strategy.get(str(name), 0.0):.1f}x gross",
+            showarrow=False,
+        )
     fig.update_layout(
-        title="Average portfolio composition (mean weight by asset)",
+        title="Average portfolio composition (% of gross; leverage annotated)",
         barmode="stack",
         xaxis_title="Strategy",
-        yaxis_title="Weight",
+        yaxis_title="Share of gross exposure",
         yaxis_tickformat=".0%",
         template="plotly_white",
         legend_title="Asset",
@@ -87,23 +114,67 @@ def _composition_figure(results: Mapping[str, BacktestResult]) -> Any:
     return fig
 
 
+def _unique_in_order(values: list[Any]) -> list[Any]:
+    seen: set[Any] = set()
+    out: list[Any] = []
+    for v in values:
+        if v not in seen:
+            seen.add(v)
+            out.append(v)
+    return out
+
+
 def _rebalance_subtitle(results: Mapping[str, BacktestResult], periods_per_year: int) -> str:
-    """Build an explicit rebalancing/period caption from result metadata."""
-    res = next(iter(results.values()))
-    meta = res.metadata or {}
-    freq = str(meta.get("frequency", "?")).capitalize()
-    lookback = meta.get("lookback")
-    n_reb = (res.diagnostics or {}).get("n_rebalances")
+    """Build an explicit rebalancing/period caption from ALL results' metadata.
+
+    When every strategy shares a frequency / lookback / rebalance count the
+    caption reads as a single setting; when they differ it reports the mix
+    (e.g. ``Mixed rebalancing (monthly, quarterly) · lookbacks 60-252``) rather
+    than misattributing the first strategy's settings to all of them.
+    """
+    freqs = _unique_in_order(
+        [str((res.metadata or {}).get("frequency", "?")) for res in results.values()]
+    )
+    lookbacks = _unique_in_order(
+        [
+            (res.metadata or {}).get("lookback")
+            for res in results.values()
+            if (res.metadata or {}).get("lookback") is not None
+        ]
+    )
+    n_rebs = _unique_in_order(
+        [
+            (res.diagnostics or {}).get("n_rebalances")
+            for res in results.values()
+            if (res.diagnostics or {}).get("n_rebalances") is not None
+        ]
+    )
     unit = "day" if periods_per_year >= 252 else "month" if periods_per_year == 12 else "period"
-    w = res.weights
-    span = ""
-    if w is not None and len(w):
-        span = f" · {pd.Timestamp(w.index[0]):%Y-%m} → {pd.Timestamp(w.index[-1]):%Y-%m}"
-    parts = [f"{freq} rebalancing"]
-    if lookback is not None:
-        parts.append(f"{lookback}-{unit} lookback (covariance & vol)")
-    if n_reb is not None:
-        parts.append(f"{n_reb} rebalances")
+
+    if len(freqs) == 1:
+        parts = [f"{freqs[0].capitalize()} rebalancing"]
+    else:
+        parts = [f"Mixed rebalancing ({', '.join(freqs)})"]
+    if len(lookbacks) == 1:
+        parts.append(f"{lookbacks[0]}-{unit} lookback (covariance & vol)")
+    elif lookbacks:
+        parts.append(f"lookbacks {min(lookbacks)}-{max(lookbacks)}")
+    if len(n_rebs) == 1:
+        parts.append(f"{n_rebs[0]} rebalances")
+    elif n_rebs:
+        parts.append(f"{min(n_rebs)}-{max(n_rebs)} rebalances")
+
+    starts = [
+        pd.Timestamp(res.weights.index[0])
+        for res in results.values()
+        if res.weights is not None and len(res.weights)
+    ]
+    ends = [
+        pd.Timestamp(res.weights.index[-1])
+        for res in results.values()
+        if res.weights is not None and len(res.weights)
+    ]
+    span = f" · {min(starts):%Y-%m} → {max(ends):%Y-%m}" if starts else ""
     return " · ".join(parts) + span
 
 

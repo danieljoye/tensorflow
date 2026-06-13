@@ -87,7 +87,10 @@ class Constraints:
     max_turnover:
         Optional cap on one-period turnover (sum of absolute weight changes from
         the previous portfolio) applied during backtest rebalances. ``None``
-        means unconstrained.
+        means unconstrained. The backtester threads the *drifted* pre-rebalance
+        book into turnover-aware optimizers; the **first** rebalance (deployment
+        from cash, which needs turnover ~= 1) is deliberately exempt so a small
+        cap does not make the initial deployment infeasible.
 
     Raises
     ------

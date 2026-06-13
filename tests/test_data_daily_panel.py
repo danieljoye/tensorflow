@@ -218,9 +218,12 @@ _GOLD_RAW = (
     "date,gold_pm_usd,gold_pm_gbp,gold_pm_eur\n1968-01-02,35.0,15.0,0\n1968-01-03,36.0,15.2,0\n"
 )
 # Monthly Shiller dividend mirror: ``Date,SP500,Dividend,...`` (yield = Dividend/SP500).
+# The Dec-1967 row exists so the (one-month-lagged, look-ahead-free) yield applied
+# within Jan 1968 is a real observation rather than NaN->0.
 _SHILLER_RAW = (
     "Date,SP500,Dividend,Earnings,Consumer Price Index,Long Interest Rate,"
     "Real Price,Real Dividend,Real Earnings,PE10\n"
+    "1967-12-01,95.0,2.85,0,0,0,0,0,0,0\n"
     "1968-01-01,96.0,2.88,0,0,0,0,0,0,0\n"
     "1968-02-01,90.0,2.97,0,0,0,0,0,0,0\n"
 )
@@ -240,8 +243,10 @@ def test_assemble_panel_aligns_and_derives() -> None:
     assert frame["BONDS"].iloc[1] == pytest.approx(expected_day2)
     # STOCKS_TR rebased to 100 on the first aligned date; day-2 return is the
     # price change plus the daily slice of the ffilled monthly dividend yield.
+    # The yield is lagged one month (L3: no intra-month look-ahead), so days in
+    # Jan 1968 carry DEC 1967's yield, not January's own.
     assert frame["STOCKS_TR"].iloc[0] == pytest.approx(100.0)
-    y0 = 2.88 / 96.0  # Jan yield, ffilled onto 1968-01-02
+    y0 = 2.85 / 95.0  # Dec-1967 yield, lagged+ffilled onto 1968-01-02
     expected_tr2 = 100.0 * (1.0 + (110.0 / 100.0 - 1.0) + y0 / 252.0)
     assert frame["STOCKS_TR"].iloc[1] == pytest.approx(expected_tr2)
     # Dividend carry makes STOCKS_TR grow at least as fast as the price leg.
@@ -277,14 +282,17 @@ def test_assemble_panel_splices_current_stocks_leg() -> None:
 
 
 def test_splice_stocks_scales_current_leg_to_seam() -> None:
-    # Deep leg ends at 200 on the shared seam date where current reads 100, so the
-    # current leg must be scaled by 200/100 = 2 after the seam to stay continuous.
+    # NOTE: this test previously used an absurd 2.0 seam scale, which pinned the
+    # old unguarded behavior; the splice now sanity-checks the seam (L4), so the
+    # legs here differ only by a realistic timestamp/rounding-sized factor.
+    # Deep leg reads 200 on the shared seam date where current reads 199, so the
+    # current leg must be scaled by 200/199 after the seam to stay continuous.
     deep = pd.Series(
         [180.0, 200.0],
         index=pd.DatetimeIndex([pd.Timestamp(2024, 2, 23), pd.Timestamp(2024, 2, 26)]),
     )
     current = pd.Series(
-        [100.0, 110.0],
+        [199.0, 219.0],
         index=pd.DatetimeIndex([pd.Timestamp(2024, 2, 26), pd.Timestamp(2024, 2, 27)]),
     )
     spliced = _splice_stocks(deep, current)
@@ -293,10 +301,10 @@ def test_splice_stocks_scales_current_leg_to_seam() -> None:
         pd.Timestamp(2024, 2, 26),
         pd.Timestamp(2024, 2, 27),
     ]
-    # Deep verbatim up to the seam; current scaled by 2.0 afterward.
+    # Deep verbatim up to the seam; current scaled by 200/199 afterward.
     assert spliced.loc[pd.Timestamp(2024, 2, 23)] == pytest.approx(180.0)
     assert spliced.loc[pd.Timestamp(2024, 2, 26)] == pytest.approx(200.0)
-    assert spliced.loc[pd.Timestamp(2024, 2, 27)] == pytest.approx(220.0)
+    assert spliced.loc[pd.Timestamp(2024, 2, 27)] == pytest.approx(219.0 * 200.0 / 199.0)
     assert (spliced > 0).all()
 
 

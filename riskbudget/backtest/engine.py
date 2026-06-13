@@ -350,6 +350,7 @@ class WalkForwardBacktester:
 
         mu = self._estimate_mu(window_matrix) if self.mean_model is not None else None
 
+        self._sync_prev_weights(optimizer, assets, drifted)
         portfolio = self._construct(optimizer, cov, budget, mu)
         w = portfolio.as_array(assets)
 
@@ -363,6 +364,37 @@ class WalkForwardBacktester:
             "net_exposure": float(w.sum()),
         }
         return w, diag
+
+    @staticmethod
+    def _sync_prev_weights(
+        optimizer: _Solver | _Constructor,
+        assets: list[str],
+        drifted: np.ndarray,
+    ) -> None:
+        """Thread the *drifted* pre-rebalance book into turnover-aware optimizers.
+
+        Optimizers that enforce ``Constraints.max_turnover`` (the convex
+        risk-budget path) need the previous-period weights to constrain against.
+        The seam is duck-typed and **optional**: any optimizer exposing a
+        ``set_prev_weights(mapping | None)`` method receives the drifted book
+        (keyed by asset id, in this run's asset order) before every solve;
+        optimizers without the method are untouched.
+
+        The **first** rebalance deploys from cash (``drifted`` is all zeros). A
+        ``max_turnover`` small enough to be useful would make that initial
+        deployment infeasible (it requires turnover ~= 1), so the first
+        rebalance is deliberately treated as *unconstrained-by-turnover*:
+        ``set_prev_weights(None)`` is passed, which also clears any state left
+        over from a previous run of the same optimizer object.
+        """
+        setter = getattr(optimizer, "set_prev_weights", None)
+        if not callable(setter):
+            return
+        if not np.any(drifted):
+            # First rebalance (deployment from cash): exempt from max_turnover.
+            setter(None)
+            return
+        setter({a: float(w) for a, w in zip(assets, drifted, strict=True)})
 
     def _estimate_mu(self, window: ReturnMatrix) -> ExpectedReturns:
         assert self.mean_model is not None

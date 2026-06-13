@@ -209,8 +209,30 @@ class StrategySpec(BaseModel):
     # Optional volatility-targeting overlay: when set, the constructed book is
     # re-levered each rebalance to this annualized volatility (ex-ante, capped at
     # ``target_vol_max_leverage``). None disables it (fully-invested as solved).
-    target_volatility: PositiveFloat | None = None
-    target_vol_max_leverage: PositiveFloat = 3.0
+    #
+    # PRECEDENCE (see riskbudget.optimize.voltarget): the overlay INTENTIONALLY
+    # re-levers the inner solution, so the final gross exposure is bounded by
+    # ``target_vol_max_leverage`` — NOT by ``constraints.leverage``. The inner
+    # method solves at its constrained gross (default 1.0); the overlay then
+    # rescales uniformly. Combining ``target_volatility`` with an explicit
+    # non-default ``constraints.leverage`` is rejected (ConfigurationError).
+    # ``constraints.max_weight`` IS honored on the final scaled weights: the
+    # scale is reduced so no scaled weight breaches the per-asset cap.
+    target_volatility: PositiveFloat | None = Field(
+        default=None,
+        description=(
+            "Annualized ex-ante volatility target for the vol-target overlay. The "
+            "overlay re-levers the solved book each rebalance; the final gross is "
+            "bounded by target_vol_max_leverage, not constraints.leverage."
+        ),
+    )
+    target_vol_max_leverage: PositiveFloat = Field(
+        default=3.0,
+        description=(
+            "Gross-exposure cap for the vol-target overlay. When target_volatility "
+            "is set, THIS (not constraints.leverage) bounds the final gross."
+        ),
+    )
 
     start: date | None = None
     end: date | None = None
@@ -250,7 +272,35 @@ class StrategySpec(BaseModel):
             raise ConfigurationError(
                 "black_litterman views supplied but mean_model is not 'black_litterman'."
             )
+        self._validate_voltarget_leverage()
         return self
+
+    def _validate_voltarget_leverage(self) -> None:
+        """Reject a vol target combined with an explicit non-default leverage.
+
+        The vol-target overlay intentionally re-levers the inner book, so
+        ``constraints.leverage`` does NOT bound the final gross —
+        ``target_vol_max_leverage`` does (see :mod:`riskbudget.optimize.voltarget`).
+        A user who *explicitly* set a leverage other than the 1.0 default while
+        also requesting a vol target is asking for two conflicting gross
+        exposures; flag it instead of silently ignoring one. The untouched
+        default (``leverage=1.0`` not set by the user) is not a conflict.
+        """
+        if self.target_volatility is None:
+            return
+        cs = self.constraints
+        if "leverage" not in cs.model_fields_set:
+            return  # default, not user-set — no conflict
+        if cs.leverage is None or cs.leverage == 1.0:
+            return  # unconstrained / the default value — the overlay governs
+        raise ConfigurationError(
+            f"target_volatility={self.target_volatility} conflicts with the explicit "
+            f"constraints.leverage={cs.leverage}: the vol-target overlay re-levers the "
+            "book each rebalance, so the final gross is bounded by "
+            f"target_vol_max_leverage={self.target_vol_max_leverage}, not by "
+            "constraints.leverage. Remove constraints.leverage (or the vol target), "
+            "and use target_vol_max_leverage to cap the gross."
+        )
 
     @property
     def _registry(self) -> Registry:
